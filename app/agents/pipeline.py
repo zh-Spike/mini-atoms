@@ -330,12 +330,12 @@ async def _race(
     yield _ev("race_done", version_ids=candidates)
 
 
-def _charge_extra_generation(db: Session, project: Project) -> bool:
-    """Race costs one more generation than a normal run; False if the user has none left."""
+def _charge_extra_generations(db: Session, project: Project, extra: int) -> bool:
+    """A race costs one generation per lane; the first was charged by the API. False if short."""
     user = db.get(User, project.user_id)
-    if user is None or user.generations_used >= get_settings().user_generation_limit:
+    if user is None or user.generations_used + extra > get_settings().user_generation_limit:
         return False
-    user.generations_used += 1
+    user.generations_used += extra
     db.commit()
     return True
 
@@ -381,10 +381,12 @@ async def run_pipeline(
             yield _ev("agent_end", agent="mike", message=message_out(msg))
 
         race = bool(race_lanes) and len(race_lanes) > 1 and mode in ("build", "rebuild")
-        if race and not _charge_extra_generation(db, project):
-            race = False
-            note = "生成额度不足以进行 Race（需要 2 次），本次按单方案生成。"
-            yield _ev("notice", text=note)
+        if race:
+            assert race_lanes is not None
+            if not _charge_extra_generations(db, project, len(race_lanes) - 1):
+                race = False
+                note = f"生成额度不足以进行 Race（需要 {len(race_lanes)} 次），本次按单方案生成。"
+                yield _ev("notice", text=note)
 
         if mode in ("build", "rebuild"):
             base_files = {}

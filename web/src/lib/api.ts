@@ -61,6 +61,12 @@ export interface SharedApp {
   updated_at: string
 }
 
+export interface ModelsInfo {
+  default: string
+  race_models: string[]
+  max_race_lanes: number
+}
+
 export interface RunStats {
   duration_ms: number
   tokens: number
@@ -145,19 +151,20 @@ export const api = {
   unpublish: (projectId: string) =>
     request<{ ok: boolean }>('DELETE', `/api/projects/${projectId}/share`),
   getShared: (slug: string) => request<SharedApp>('GET', `/api/share/${slug}`),
+  models: () => request<ModelsInfo>('GET', '/api/models'),
 }
 
 /** POSTs a chat message and yields NDJSON run events as they stream in. */
 export async function* sendMessage(
   projectId: string,
   content: string,
-  race: boolean,
+  raceModels: string[] | null,
   signal?: AbortSignal,
 ): AsyncGenerator<RunEvent> {
   const resp = await fetch(`/api/projects/${projectId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, race }),
+    body: JSON.stringify({ content, race: raceModels !== null, race_models: raceModels ?? [] }),
     credentials: 'same-origin',
     signal,
   })

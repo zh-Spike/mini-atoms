@@ -117,7 +117,7 @@ export function useAgentRun(projectId: string, handlers: Handlers) {
   }, [])
 
   const start = useCallback(
-    async (content: string, race = false) => {
+    async (content: string, raceModels: string[] | null = null) => {
       if (abortRef.current) return
       const ctrl = new AbortController()
       abortRef.current = ctrl
@@ -127,7 +127,7 @@ export function useAgentRun(projectId: string, handlers: Handlers) {
       const s = stateRef.current
       let stats: RunStats | null = null
       try {
-        for await (const ev of sendMessage(projectId, content, race, ctrl.signal)) {
+        for await (const ev of sendMessage(projectId, content, raceModels, ctrl.signal)) {
           if ('lane' in ev && ev.lane !== undefined && s.race) {
             const lane = s.race[ev.lane]
             if (ev.type === 'lane_done') {

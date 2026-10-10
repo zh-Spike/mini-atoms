@@ -1,11 +1,13 @@
 import clsx from 'clsx'
-import { ArrowUp, Check, FileCode2, Loader2, Square, Swords, Timer } from 'lucide-react'
+import { ArrowUp, Check, FileCode2, Loader2, Square, Timer } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import Markdown from 'react-markdown'
 import type { LiveTurn } from '../hooks/useAgentRun'
 import type { Message, RunStats } from '../lib/api'
 import { AGENTS } from '../lib/agents'
+import { useModels } from '../lib/models'
 import AgentAvatar from './AgentAvatar'
+import { RaceModelPicker, RaceToggle } from './RaceControl'
 
 interface Props {
   messages: Message[]
@@ -13,7 +15,7 @@ interface Props {
   running: boolean
   versionNumbers: Record<string, number>
   stats: RunStats | null
-  onSend: (text: string, race: boolean) => void
+  onSend: (text: string, raceModels: string[] | null) => void
   onStop: () => void
   onOpenVersion: (versionId: string) => void
 }
@@ -21,7 +23,8 @@ interface Props {
 export default function ChatPanel(props: Props) {
   const { messages, live, running, versionNumbers, stats, onSend, onStop, onOpenVersion } = props
   const [input, setInput] = useState('')
-  const [race, setRace] = useState(false)
+  const [race, setRace] = useState<string[] | null>(null)
+  const models = useModels()
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,7 +36,7 @@ export default function ChatPanel(props: Props) {
     if (!input.trim() || running) return
     onSend(input.trim(), race)
     setInput('')
-    setRace(false)
+    setRace(null)
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -68,6 +71,9 @@ export default function ChatPanel(props: Props) {
           </p>
         )}
         <div className="rounded-xl border border-zinc-300 bg-white p-2 focus-within:border-violet-400">
+          {race && models && !running && (
+            <RaceModelPicker info={models} value={race} onChange={setRace} />
+          )}
           <textarea
             rows={2}
             value={input}
@@ -77,7 +83,7 @@ export default function ChatPanel(props: Props) {
             className="w-full resize-none px-1 text-sm outline-none"
           />
           <div className="flex items-center justify-between">
-            <RaceToggle on={race} onChange={setRace} disabled={running} />
+            <RaceToggle info={models} value={race} onChange={setRace} disabled={running} />
             {running ? (
               <button
                 onClick={onStop}
@@ -100,33 +106,6 @@ export default function ChatPanel(props: Props) {
         </div>
       </div>
     </div>
-  )
-}
-
-export function RaceToggle({
-  on,
-  onChange,
-  disabled,
-}: {
-  on: boolean
-  onChange: (on: boolean) => void
-  disabled?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onChange(!on)}
-      title="多个方案并行生成，生成后对比预览、择优采用。仅在新建或推倒重做时生效，消耗 2 次额度"
-      className={clsx(
-        'flex items-center gap-1 rounded-full px-2.5 py-1 text-xs disabled:opacity-40',
-        on
-          ? 'bg-violet-600 text-white'
-          : 'bg-zinc-100 text-zinc-500 hover:bg-violet-50 hover:text-violet-700',
-      )}
-    >
-      <Swords className="size-3.5" /> Race ×2
-    </button>
   )
 }
 

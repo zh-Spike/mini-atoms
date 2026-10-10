@@ -121,11 +121,11 @@ export default function Workbench() {
   })
 
   const send = useCallback(
-    (text: string, race = false) => {
+    (text: string, raceModels: string[] | null = null) => {
       hadVersionAtStart.current = versions.length > 0
       setCandidates(null)
       setPick(0)
-      void start(text, race)
+      void start(text, raceModels)
     },
     [start, versions.length],
   )
@@ -145,12 +145,15 @@ export default function Workbench() {
           setShown(p.latest_version)
           setPane('preview')
         }
-        const state = location.state as { autoPrompt?: string; race?: boolean } | null
+        const state = location.state as {
+          autoPrompt?: string
+          raceModels?: string[] | null
+        } | null
         if (state?.autoPrompt && p.messages.length === 0 && !autoSent.current) {
           autoSent.current = true
           navigate(location.pathname, { replace: true, state: null })
           hadVersionAtStart.current = false
-          void start(state.autoPrompt, Boolean(state.race))
+          void start(state.autoPrompt, state.raceModels ?? null)
         }
       },
       (err) => setLoadError(err instanceof ApiError ? err.message : '加载失败'),
@@ -297,9 +300,9 @@ export default function Workbench() {
             running={running}
             versionNumbers={versionNumbers}
             stats={stats}
-            onSend={(text, race) => {
-              send(text, race)
-              if (race) setPane('preview')
+            onSend={(text, raceModels) => {
+              send(text, raceModels)
+              if (raceModels) setPane('preview')
             }}
             onStop={stop}
             onOpenVersion={(id) => void openVersion(id)}
@@ -344,7 +347,7 @@ export default function Workbench() {
 
             {racing ? (
               <span className="flex items-center gap-1 text-xs whitespace-nowrap text-violet-700">
-                <Swords className="size-3.5" /> Race：{run?.race?.length} 个方案并行编写中
+                <Swords className="size-3.5" /> Race：{run?.race?.length} 个模型并行编写中
               </span>
             ) : running ? (
               <PipelineBar steps={steps} active={active} completed={run.completed} />
