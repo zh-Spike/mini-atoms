@@ -7,47 +7,92 @@ from openai import BadRequestError
 from app.agents import llm as llm_module
 from app.agents.llm import OpenAICompatLLM, build_race_lanes
 
+MSG = [{"role": "user", "content": "hi"}]
 
-def _bad_request() -> BadRequestError:
+
+def _bad_request(message: str = "unsupported parameter") -> BadRequestError:
     response = httpx2.Response(400, request=httpx2.Request("POST", "http://test/v1"))
-    return BadRequestError("unsupported parameter", response=response, body=None)
+    return BadRequestError(message, response=response, body=None)
 
 
-class _Completions:
-    """Rejects any request that carries one of `rejected` params."""
+class _Endpoint:
+    """Records calls; raises `error` for requests carrying any of `rejected` params."""
 
-    def __init__(self, rejected: set[str]) -> None:
-        self.rejected = rejected
+    def __init__(self, reply, rejected=(), error: BadRequestError | None = None) -> None:
+        self.reply, self.rejected, self.error = reply, set(rejected), error
         self.calls: list[set[str]] = []
 
     async def create(self, **kw):
         self.calls.append(set(kw))
+        if self.error is not None:
+            raise self.error
         if self.rejected & set(kw):
             raise _bad_request()
-        message = SimpleNamespace(content="ok")
-        return SimpleNamespace(usage=None, choices=[SimpleNamespace(message=message)])
+        return self.reply
 
 
-def _llm_with(rejected: set[str], model: str) -> tuple[OpenAICompatLLM, _Completions]:
+def _chat_reply(text: str = "ok"):
+    message = SimpleNamespace(content=text)
+    return SimpleNamespace(usage=None, choices=[SimpleNamespace(message=message)])
+
+
+def _llm(model: str, chat: _Endpoint, responses: _Endpoint | None = None) -> OpenAICompatLLM:
     llm = OpenAICompatLLM(model)
-    completions = _Completions(rejected)
-    llm._client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
-    return llm, completions
+    responses = responses or _Endpoint(SimpleNamespace(usage=None, output_text="via responses"))
+    llm._client = SimpleNamespace(chat=SimpleNamespace(completions=chat), responses=responses)
+    return llm
+
+
+def _reset(monkeypatch) -> None:
+    monkeypatch.setattr(llm_module, "_dropped", {})
+    monkeypatch.setattr(llm_module, "_responses_detected", set())
 
 
 def test_drops_rejected_params_per_model(monkeypatch) -> None:
-    monkeypatch.setattr(llm_module, "_dropped", {})
-    llm, calls = _llm_with({"extra_body"}, "grok-4.7")
-    assert asyncio.run(llm.complete([{"role": "user", "content": "hi"}])) == "ok"
-    assert "extra_body" in calls.calls[0] and "extra_body" not in calls.calls[1]
+    _reset(monkeypatch)
+    chat = _Endpoint(_chat_reply(), rejected={"extra_body"})
+    assert asyncio.run(_llm("model-x", chat).complete(MSG)) == "ok"
+    assert "extra_body" in chat.calls[0] and "extra_body" not in chat.calls[1]
 
-    again, calls = _llm_with({"extra_body"}, "grok-4.7")
-    asyncio.run(again.complete([{"role": "user", "content": "hi"}]))
-    assert len(calls.calls) == 1
+    chat = _Endpoint(_chat_reply(), rejected={"extra_body"})
+    asyncio.run(_llm("model-x", chat).complete(MSG))
+    assert len(chat.calls) == 1
 
-    other, calls = _llm_with(set(), "glm-5.3")
-    asyncio.run(other.complete([{"role": "user", "content": "hi"}]))
-    assert "extra_body" in calls.calls[0]
+    chat = _Endpoint(_chat_reply())
+    asyncio.run(_llm("model-y", chat).complete(MSG))
+    assert "extra_body" in chat.calls[0]
+
+
+def test_only_the_rejected_param_is_dropped(monkeypatch) -> None:
+    _reset(monkeypatch)
+    chat = _Endpoint(_chat_reply(), rejected={"reasoning_effort"})
+    asyncio.run(_llm("model-r", chat).complete(MSG))
+    assert llm_module._dropped["model-r"] == {"reasoning_effort"}
+    assert "extra_body" in chat.calls[-1]
+
+    _reset(monkeypatch)
+    chat = _Endpoint(_chat_reply(), rejected={"reasoning_effort", "extra_body"})
+    asyncio.run(_llm("model-s", chat).complete(MSG))
+    assert llm_module._dropped["model-s"] == {"reasoning_effort", "extra_body"}
+
+
+def test_switches_to_responses_on_protocol_error(monkeypatch) -> None:
+    _reset(monkeypatch)
+    chat = _Endpoint(_chat_reply(), error=_bad_request("protocol_not_supported"))
+    assert asyncio.run(_llm("model-z", chat).complete(MSG)) == "via responses"
+    assert len(chat.calls) == 1
+
+    chat = _Endpoint(_chat_reply())
+    assert asyncio.run(_llm("model-z", chat).complete(MSG)) == "via responses"
+    assert chat.calls == []
+
+
+def test_configured_responses_models(monkeypatch) -> None:
+    _reset(monkeypatch)
+    chat = _Endpoint(_chat_reply())
+    responses = _Endpoint(SimpleNamespace(usage=None, output_text="r"))
+    assert asyncio.run(_llm("grok-4.7", chat, responses).complete(MSG)) == "r"
+    assert chat.calls == [] and "input" in responses.calls[0]
 
 
 def test_build_race_lanes() -> None:

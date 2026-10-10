@@ -22,6 +22,7 @@ export interface LiveTurn {
 export interface LaneState {
   label: string
   agent: AgentId | null
+  thinking: string
   files: Files
   doneFiles: string[]
   currentFile: string | null
@@ -58,6 +59,7 @@ const emptyRun = (): RunState => ({
 const newLane = (label: string): LaneState => ({
   label,
   agent: null,
+  thinking: '',
   files: {},
   doneFiles: [],
   currentFile: null,
@@ -70,8 +72,13 @@ function applyLaneEvent(lane: LaneState, ev: RunEvent) {
   switch (ev.type) {
     case 'agent_start':
       lane.agent = ev.agent
+      lane.thinking = ''
+      break
+    case 'thinking':
+      lane.thinking = (lane.thinking + ev.text).slice(-THINKING_TAIL * 2)
       break
     case 'file_start':
+      lane.thinking = ''
       lane.files[ev.path] = ''
       lane.currentFile = ev.path
       lane.doneFiles = lane.doneFiles.filter((p) => p !== ev.path)

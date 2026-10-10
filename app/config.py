@@ -12,11 +12,15 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://cf.api.fan/v1"
     llm_api_key: str = ""
     llm_model: str = "deepseek-flash"
-    # Sends `thinking: {type: disabled}` (DeepSeek-style); much faster first token for codegen.
+    # Fast mode: sends `thinking: {type: disabled}` (DeepSeek-style) and low reasoning effort
+    # (GLM / Grok); much faster first token for codegen. Unsupported params are dropped per model.
     llm_disable_thinking: bool = True
     # Comma-separated models (same gateway) users can pick 2-3 of for a race; `llm_model` is
     # always offered too.
     llm_race_models: str = "glm-5.3-flashx,glm-5.3,grok-4.7"
+    # Models called via the Responses API: on this gateway grok-* rejects Chat Completions and
+    # glm-5.3 leaks its reasoning into `content` there. Others are detected on the first 400.
+    llm_responses_models: str = "glm-5.3,grok-4.7"
 
     secret_key: str = "dev-secret-change-me"
     # Comma-separated "CODE:max_uses" pairs, e.g. "ROOT2026:50,DEMO:10".

@@ -13,8 +13,12 @@ MAX_RACE_LANES = 3
 
 # Optional request params some models behind the gateway reject with a 400. Once a model rejects
 # one, it is dropped for that model for the rest of the process. Tried in this order.
-_OPTIONAL_PARAMS = ("stream_options", "extra_body")
+_OPTIONAL_PARAMS = ("extra_body", "reasoning_effort", "reasoning", "stream_options", "temperature")
 _dropped: dict[str, set[str]] = {}
+# Models found at runtime to only speak the Responses API.
+_responses_detected: set[str] = set()
+
+_REASONING_EVENTS = ("response.reasoning_text.delta", "response.reasoning_summary_text.delta")
 
 
 class LLM(Protocol):
@@ -25,51 +29,136 @@ class LLM(Protocol):
     async def complete(self, messages: ChatMessages) -> str: ...
 
 
+class _ProtocolNotSupported(Exception):
+    pass
+
+
+def _is_protocol_error(e: BadRequestError) -> bool:
+    return "protocol_not_supported" in str(e)
+
+
 class OpenAICompatLLM:
+    """Chat Completions by default; Responses API for models configured or detected to need it."""
+
     def __init__(self, model: str | None = None, temperature: float = 0.4) -> None:
         settings = get_settings()
         self._client = AsyncOpenAI(
-            base_url=settings.llm_base_url, api_key=settings.llm_api_key or "missing", timeout=300
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key or "missing",
+            timeout=300,
+            max_retries=4,
         )
         self._model = model or settings.llm_model
         self._temperature = temperature
-        self._extra = {"thinking": {"type": "disabled"}} if settings.llm_disable_thinking else None
+        # Fast mode: DeepSeek-style `thinking` off, plus low reasoning effort for GLM / Grok,
+        # which otherwise think for minutes before writing code.
+        fast = settings.llm_disable_thinking
+        self._extra = {"thinking": {"type": "disabled"}} if fast else None
+        self._effort = "low" if fast else None
+        configured = {m.strip() for m in settings.llm_responses_models.split(",") if m.strip()}
+        self._configured_responses = self._model in configured
         self.tokens = 0
 
-    async def _create(self, **kw):
-        optional = {"extra_body": self._extra}
-        if kw.get("stream"):
-            optional["stream_options"] = {"include_usage": True}
+    @property
+    def _use_responses(self) -> bool:
+        return self._configured_responses or self._model in _responses_detected
+
+    async def _create(self, create, optional: dict, **kw):
+        """On a 400, find the optional param the model rejects by leaving out one at a time."""
         dropped = _dropped.setdefault(self._model, set())
-        while True:
-            extra = {k: v for k, v in optional.items() if v is not None and k not in dropped}
+        extra = {k: v for k, v in optional.items() if v is not None and k not in dropped}
+
+        async def attempt(params: dict):
             try:
-                return await self._client.chat.completions.create(model=self._model, **kw, **extra)
+                return await create(model=self._model, **kw, **params)
+            except BadRequestError as e:
+                if _is_protocol_error(e):
+                    raise _ProtocolNotSupported from e
+                raise
+
+        try:
+            return await attempt(extra)
+        except BadRequestError:
+            if not extra:
+                raise
+        for name in [p for p in _OPTIONAL_PARAMS if p in extra]:
+            try:
+                result = await attempt({k: v for k, v in extra.items() if k != name})
             except BadRequestError:
-                droppable = [p for p in _OPTIONAL_PARAMS if p in extra]
-                if not droppable:
-                    raise
-                dropped.add(droppable[0])
+                continue
+            dropped.add(name)
+            return result
+        result = await attempt({})
+        dropped.update(extra)
+        return result
+
+    async def _chat(self, messages: ChatMessages, temperature: float, stream: bool):
+        optional: dict = {"extra_body": self._extra, "reasoning_effort": self._effort}
+        if stream:
+            optional["stream_options"] = {"include_usage": True}
+        return await self._create(
+            self._client.chat.completions.create,
+            optional,
+            messages=messages,
+            temperature=temperature,
+            stream=stream,
+        )
+
+    async def _responses(self, messages: ChatMessages, temperature: float, stream: bool):
+        return await self._create(
+            self._client.responses.create,
+            {
+                "reasoning": {"effort": self._effort} if self._effort else None,
+                "temperature": temperature,
+            },
+            input=messages,
+            stream=stream,
+        )
 
     async def stream(self, messages: ChatMessages) -> AsyncIterator[tuple[ChunkKind, str]]:
-        resp = await self._create(messages=messages, stream=True, temperature=self._temperature)
-        async for chunk in resp:
-            if chunk.usage:
-                self.tokens += chunk.usage.total_tokens or 0
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            reasoning = (delta.model_extra or {}).get("reasoning_content")
-            if reasoning:
-                yield "think", reasoning
-            if delta.content:
-                yield "text", delta.content
+        if not self._use_responses:
+            try:
+                resp = await self._chat(messages, self._temperature, stream=True)
+            except _ProtocolNotSupported:
+                _responses_detected.add(self._model)
+            else:
+                async for chunk in resp:
+                    if chunk.usage:
+                        self.tokens += chunk.usage.total_tokens or 0
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    reasoning = (delta.model_extra or {}).get("reasoning_content")
+                    if reasoning:
+                        yield "think", reasoning
+                    if delta.content:
+                        yield "text", delta.content
+                return
+
+        events = await self._responses(messages, self._temperature, stream=True)
+        async for ev in events:
+            if ev.type == "response.output_text.delta":
+                yield "text", ev.delta
+            elif ev.type in _REASONING_EVENTS:
+                yield "think", ev.delta
+            elif ev.type == "response.completed" and ev.response.usage:
+                self.tokens += ev.response.usage.total_tokens or 0
 
     async def complete(self, messages: ChatMessages) -> str:
-        resp = await self._create(messages=messages, temperature=0.2)
+        if not self._use_responses:
+            try:
+                resp = await self._chat(messages, 0.2, stream=False)
+            except _ProtocolNotSupported:
+                _responses_detected.add(self._model)
+            else:
+                if resp.usage:
+                    self.tokens += resp.usage.total_tokens or 0
+                return resp.choices[0].message.content or ""
+
+        resp = await self._responses(messages, 0.2, stream=False)
         if resp.usage:
             self.tokens += resp.usage.total_tokens or 0
-        return resp.choices[0].message.content or ""
+        return resp.output_text or ""
 
 
 @dataclass
