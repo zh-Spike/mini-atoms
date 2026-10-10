@@ -61,10 +61,13 @@ class FakeLLM:
 def fake_llm() -> Iterator[FakeLLM]:
     llm = FakeLLM()
     app.dependency_overrides[get_llm] = lambda: llm
-    app.dependency_overrides[get_race_lanes] = lambda: [
-        RaceLane("fake · 稳健", llm),
-        RaceLane("fake · 创意", llm, "\n大胆一点"),
-    ]
+
+    def make_lanes(models: list[str]) -> list[RaceLane]:
+        if models:
+            return [RaceLane(m, llm) for m in models]
+        return [RaceLane("fake · 稳健", llm), RaceLane("fake · 创意", llm, "\n大胆一点")]
+
+    app.dependency_overrides[get_race_lanes] = lambda: make_lanes
     yield llm
     app.dependency_overrides.clear()
 

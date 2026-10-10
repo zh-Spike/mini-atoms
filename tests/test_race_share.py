@@ -47,6 +47,36 @@ def test_race_produces_candidates_and_adopt(authed: TestClient, fake_llm) -> Non
     assert detail["latest_version"]["number"] == 3
 
 
+def test_models_endpoint(authed: TestClient) -> None:
+    data = authed.get("/api/models").json()
+    assert data["race_models"] == ["deepseek-flash", "glm-5.3-flashx", "glm-5.3", "grok-4.7"]
+    assert data["default"] == "deepseek-flash" and data["max_race_lanes"] == 3
+
+
+def test_race_with_picked_models(authed: TestClient, fake_llm) -> None:
+    pid = _new_project(authed)
+    models = ["glm-5.3-flashx", "glm-5.3", "grok-4.7"]
+    events = _build(authed, pid, race=True, race_models=models)
+    assert next(e for e in events if e["type"] == "race_start")["lanes"] == models
+    labels = [e["version"]["label"] for e in events if e["type"] == "lane_done"]
+    assert labels == models
+    assert authed.get("/api/auth/me").json()["generations_used"] == 3
+
+
+def test_race_model_validation(authed: TestClient, fake_llm) -> None:
+    pid = _new_project(authed)
+    bad = _build_status(authed, pid, race=True, race_models=["glm-5.3", "gpt-unknown"])
+    assert bad == 400
+    assert _build_status(authed, pid, race=True, race_models=["glm-5.3"]) == 400
+    assert _build_status(authed, pid, race=True, race_models=["a", "b", "c", "d"]) == 422
+    assert authed.get("/api/auth/me").json()["generations_used"] == 0
+
+
+def _build_status(client: TestClient, pid: str, **body) -> int:
+    resp = client.post(f"/api/projects/{pid}/messages", json={"content": "x", **body})
+    return resp.status_code
+
+
 def test_race_ignored_for_edits(authed: TestClient, fake_llm) -> None:
     pid = _new_project(authed)
     _build(authed, pid)

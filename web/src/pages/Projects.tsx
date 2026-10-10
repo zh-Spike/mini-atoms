@@ -1,9 +1,10 @@
 import { ArrowUp, LogOut, Trash2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { RaceToggle } from '../components/ChatPanel'
 import Logo from '../components/Logo'
+import { RaceModelPicker, RaceToggle } from '../components/RaceControl'
 import { api, ApiError, type ProjectSummary } from '../lib/api'
+import { useModels } from '../lib/models'
 import { useAuth } from '../lib/useAuth'
 import { formatTime } from '../lib/format'
 
@@ -22,7 +23,8 @@ export default function Projects() {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
   const [prompt, setPrompt] = useState('')
   const [creating, setCreating] = useState(false)
-  const [race, setRace] = useState(false)
+  const [race, setRace] = useState<string[] | null>(null)
+  const models = useModels()
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export default function Projects() {
     setError('')
     try {
       const project = await api.createProject(text.trim())
-      navigate(`/p/${project.id}`, { state: { autoPrompt: text.trim(), race } })
+      navigate(`/p/${project.id}`, { state: { autoPrompt: text.trim(), raceModels: race } })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '创建失败')
       setCreating(false)
@@ -98,11 +100,14 @@ export default function Projects() {
             placeholder="用一句话描述你的应用，例如：做一个带分类统计的记账本"
             className="w-full resize-none px-2 py-1 text-[15px] outline-none"
           />
+          {race && models && <RaceModelPicker info={models} value={race} onChange={setRace} />}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <RaceToggle on={race} onChange={setRace} disabled={quotaLeft < 2} />
+              <RaceToggle info={models} value={race} onChange={setRace} disabled={quotaLeft < 2} />
               <span className="hidden text-xs text-zinc-400 sm:inline">
-                {race ? '两个工程师并行写，生成后对比择优' : 'Enter 发送 · Shift+Enter 换行'}
+                {race
+                  ? `${race.length} 个模型并行写，生成后对比择优`
+                  : 'Enter 发送 · Shift+Enter 换行'}
               </span>
             </div>
             <button

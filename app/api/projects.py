@@ -6,7 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.agents.llm import LLM, RaceLane, get_llm, get_race_lanes
+from app.agents.llm import (
+    LLM,
+    MAX_RACE_LANES,
+    RaceLaneFactory,
+    get_llm,
+    get_race_lanes,
+    race_models,
+)
 from app.agents.pipeline import create_version, latest_version, run_pipeline
 from app.auth import CurrentUser, DbSession
 from app.config import get_settings
@@ -27,6 +34,8 @@ class ProjectIn(BaseModel):
 class MessageIn(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
     race: bool = False
+    # Empty races two styles of the default model.
+    race_models: list[str] = Field(default_factory=list, max_length=MAX_RACE_LANES)
 
 
 class ManualVersionIn(BaseModel):
@@ -47,6 +56,15 @@ def _get_version(db, user: User, version_id: str) -> Version:
         raise HTTPException(status_code=404, detail="版本不存在")
     _get_project(db, user, version.project_id)
     return version
+
+
+@router.get("/models")
+def list_models(_: CurrentUser) -> dict:
+    return {
+        "default": get_settings().llm_model,
+        "race_models": race_models(),
+        "max_race_lanes": MAX_RACE_LANES,
+    }
 
 
 @router.get("/projects")
@@ -127,9 +145,18 @@ def send_message(
     user: CurrentUser,
     db: DbSession,
     llm: Annotated[LLM, Depends(get_llm)],
-    race_lanes: Annotated[list[RaceLane], Depends(get_race_lanes)],
+    make_lanes: Annotated[RaceLaneFactory, Depends(get_race_lanes)],
 ) -> StreamingResponse:
     project = _get_project(db, user, project_id)
+    lanes = None
+    if body.race:
+        picked = list(dict.fromkeys(body.race_models))
+        unknown = [m for m in picked if m not in race_models()]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"不支持的模型：{', '.join(unknown)}")
+        if len(picked) == 1:
+            raise HTTPException(status_code=400, detail="Race 至少选择 2 个模型")
+        lanes = make_lanes(picked)
     limit = get_settings().user_generation_limit
     if user.generations_used >= limit:
         raise HTTPException(status_code=429, detail=f"已用完 {limit} 次生成额度")
@@ -140,7 +167,6 @@ def send_message(
         # The request-scoped session may close before streaming ends, so use our own.
         with SessionLocal() as run_db:
             run_project = run_db.get(Project, project.id)
-            lanes = race_lanes if body.race else None
             async for event in run_pipeline(run_db, run_project, body.content.strip(), llm, lanes):
                 yield (json.dumps(event, ensure_ascii=False) + "\n").encode()
 
