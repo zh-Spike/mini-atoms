@@ -9,28 +9,15 @@ import clsx from 'clsx'
 import { Save, Wrench } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Files } from '../lib/api'
-import { dependenciesFor } from '../lib/agents'
+import { RESERVED, toSandpack } from '../lib/sandpack'
 
-const RESERVED = new Set(['/index.js', '/public/index.html', '/package.json'])
-
-const INDEX_HTML = `<!DOCTYPE html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config = { darkMode: 'class' }</script>
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
-</html>
-`
+export type Device = 'desktop' | 'mobile'
 
 interface Props {
   files: Files
   versionKey: string
   tab: 'preview' | 'code'
+  device: Device
   canFix: boolean
   onSave: (files: Files) => void
   onDirtyChange: (dirty: boolean) => void
@@ -40,22 +27,14 @@ interface Props {
 
 export default function PreviewPanel(props: Props) {
   const { files, versionKey } = props
-  const sandpackFiles = useMemo(() => {
-    const out: Record<string, { code: string; active?: boolean; hidden?: boolean }> = {}
-    for (const [path, code] of Object.entries(files)) out[path] = { code }
-    if (!out['/styles.css']) out['/styles.css'] = { code: '/* 自定义样式 */\n' }
-    out['/public/index.html'] = { code: INDEX_HTML, hidden: true }
-    if (out['/App.js']) out['/App.js'].active = true
-    return out
-  }, [files])
-  const dependencies = useMemo(() => dependenciesFor(files), [files])
+  const sandpack = useMemo(() => toSandpack(files), [files])
 
   return (
     <SandpackProvider
       key={versionKey}
       template="react"
-      files={sandpackFiles}
-      customSetup={{ dependencies }}
+      files={sandpack.files}
+      customSetup={{ dependencies: sandpack.dependencies }}
       options={{
         recompileMode: 'delayed',
         recompileDelay: 600,
@@ -67,7 +46,16 @@ export default function PreviewPanel(props: Props) {
   )
 }
 
-function Panels({ files, tab, canFix, onSave, onDirtyChange, onFixError, saveRequest }: Props) {
+function Panels({
+  files,
+  tab,
+  device,
+  canFix,
+  onSave,
+  onDirtyChange,
+  onFixError,
+  saveRequest,
+}: Props) {
   const { sandpack } = useSandpack()
   const [initial] = useState<Record<string, string>>(() =>
     Object.fromEntries(Object.entries(sandpack.files).map(([p, f]) => [p, f.code])),
@@ -96,20 +84,34 @@ function Panels({ files, tab, canFix, onSave, onDirtyChange, onFixError, saveReq
 
   return (
     <div className="relative h-full">
-      <div className={clsx('h-full', tab !== 'preview' && 'hidden')}>
-        <SandpackPreview
-          className="h-full"
-          showOpenInCodeSandbox={false}
-          showRefreshButton
-          style={{ height: '100%' }}
-        />
+      <div
+        className={clsx(
+          'h-full',
+          tab !== 'preview' && 'hidden',
+          device === 'mobile' && 'sm:flex sm:justify-center sm:overflow-auto sm:bg-zinc-100 sm:p-4',
+        )}
+      >
+        <div
+          className={clsx(
+            'h-full',
+            device === 'mobile' &&
+              'sm:w-[390px] sm:max-w-full sm:shrink-0 sm:overflow-hidden sm:rounded-[28px] sm:border-[6px] sm:border-zinc-800 sm:bg-white sm:shadow-xl',
+          )}
+        >
+          <SandpackPreview
+            className="h-full"
+            showOpenInCodeSandbox={false}
+            showRefreshButton
+            style={{ height: '100%' }}
+          />
+        </div>
       </div>
       <div className={clsx('flex h-full', tab !== 'code' && 'hidden')}>
-        <div className="w-44 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white xl:w-56">
+        <div className="hidden w-44 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white sm:block xl:w-56">
           <SandpackFileExplorer autoHiddenFiles style={{ height: '100%' }} />
         </div>
         <div className="min-w-0 flex-1">
-          <SandpackCodeEditor showTabs={false} showLineNumbers style={{ height: '100%' }} />
+          <SandpackCodeEditor showTabs showLineNumbers style={{ height: '100%' }} />
         </div>
       </div>
       {error && canFix && (

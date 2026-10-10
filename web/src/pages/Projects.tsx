@@ -1,6 +1,7 @@
 import { ArrowUp, LogOut, Trash2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { RaceToggle } from '../components/ChatPanel'
 import Logo from '../components/Logo'
 import { api, ApiError, type ProjectSummary } from '../lib/api'
 import { useAuth } from '../lib/useAuth'
@@ -21,6 +22,7 @@ export default function Projects() {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
   const [prompt, setPrompt] = useState('')
   const [creating, setCreating] = useState(false)
+  const [race, setRace] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export default function Projects() {
     setError('')
     try {
       const project = await api.createProject(text.trim())
-      navigate(`/p/${project.id}`, { state: { autoPrompt: text.trim() } })
+      navigate(`/p/${project.id}`, { state: { autoPrompt: text.trim(), race } })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '创建失败')
       setCreating(false)
@@ -97,7 +99,12 @@ export default function Projects() {
             className="w-full resize-none px-2 py-1 text-[15px] outline-none"
           />
           <div className="flex items-center justify-between">
-            <span className="px-2 text-xs text-zinc-400">Enter 发送 · Shift+Enter 换行</span>
+            <div className="flex items-center gap-2">
+              <RaceToggle on={race} onChange={setRace} disabled={quotaLeft < 2} />
+              <span className="hidden text-xs text-zinc-400 sm:inline">
+                {race ? '两个工程师并行写，生成后对比择优' : 'Enter 发送 · Shift+Enter 换行'}
+              </span>
+            </div>
             <button
               disabled={!prompt.trim() || creating}
               className="flex size-9 items-center justify-center rounded-full bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40"

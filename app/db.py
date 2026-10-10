@@ -49,8 +49,23 @@ def _drop_legacy_guest_schema() -> None:
             conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
 
 
+# Nullable columns added after the first deploy; create_all only creates missing tables.
+_ADDED_COLUMNS = {"versions": {"label": "VARCHAR(64)"}}
+
+
+def _add_missing_columns() -> None:
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table, columns in _ADDED_COLUMNS.items():
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            for name, ddl in columns.items():
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
 def init_db() -> None:
     from app import models  # noqa: F401
 
     _drop_legacy_guest_schema()
     Base.metadata.create_all(engine)
+    _add_missing_columns()

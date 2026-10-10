@@ -17,6 +17,8 @@ export const AGENTS: Record<AgentId, AgentMeta> = {
 
 export const PIPELINE: AgentId[] = ['emma', 'bob', 'alex', 'qa']
 
+export const laneName = (i: number) => `方案 ${String.fromCharCode(65 + i)}`
+
 const PACKAGE_VERSIONS: Record<string, string> = {
   'lucide-react': '^0.460.0',
   recharts: '^2.13.3',

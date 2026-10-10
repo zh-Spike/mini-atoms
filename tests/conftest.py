@@ -13,7 +13,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.agents import prompts  # noqa: E402
-from app.agents.llm import get_llm  # noqa: E402
+from app.agents.llm import RaceLane, get_llm, get_race_lanes  # noqa: E402
 from app.main import app  # noqa: E402
 
 APP_JS = (
@@ -61,6 +61,10 @@ class FakeLLM:
 def fake_llm() -> Iterator[FakeLLM]:
     llm = FakeLLM()
     app.dependency_overrides[get_llm] = lambda: llm
+    app.dependency_overrides[get_race_lanes] = lambda: [
+        RaceLane("fake · 稳健", llm),
+        RaceLane("fake · 创意", llm, "\n大胆一点"),
+    ]
     yield llm
     app.dependency_overrides.clear()
 

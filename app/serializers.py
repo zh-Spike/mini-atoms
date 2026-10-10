@@ -1,4 +1,4 @@
-from app.models import Message, Project, Version
+from app.models import Message, Project, Share, Version
 
 
 def version_out(v: Version, include_files: bool = True) -> dict:
@@ -6,6 +6,7 @@ def version_out(v: Version, include_files: bool = True) -> dict:
         "id": v.id,
         "number": v.number,
         "source": v.source,
+        "label": v.label,
         "summary": v.summary,
         "file_count": len(v.files),
         "created_at": v.created_at.isoformat(),
@@ -33,4 +34,14 @@ def project_summary(p: Project) -> dict:
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
         "version_count": len(p.versions),
+    }
+
+
+def share_out(s: Share) -> dict:
+    return {
+        "slug": s.slug,
+        "version_id": s.version_id,
+        "version_number": s.version.number,
+        "views": s.views,
+        "updated_at": s.updated_at.isoformat(),
     }
