@@ -5,6 +5,7 @@ import Landing from './pages/Landing'
 import Projects from './pages/Projects'
 
 const Workbench = lazy(() => import('./pages/Workbench'))
+const SharePage = lazy(() => import('./pages/SharePage'))
 
 export default function App() {
   return (
@@ -26,6 +27,14 @@ export default function App() {
               <Workbench />
             </Suspense>
           </RequireAuth>
+        }
+      />
+      <Route
+        path="/s/:slug"
+        element={
+          <Suspense fallback={<FullScreenSpinner />}>
+            <SharePage />
+          </Suspense>
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />

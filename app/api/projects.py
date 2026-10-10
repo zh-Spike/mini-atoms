@@ -6,13 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.agents.llm import LLM, get_llm
+from app.agents.llm import LLM, RaceLane, get_llm, get_race_lanes
 from app.agents.pipeline import create_version, latest_version, run_pipeline
 from app.auth import CurrentUser, DbSession
 from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Project, User, Version
-from app.serializers import message_out, project_summary, version_out
+from app.serializers import message_out, project_summary, share_out, version_out
 
 router = APIRouter(prefix="/api", tags=["projects"])
 
@@ -26,6 +26,7 @@ class ProjectIn(BaseModel):
 
 class MessageIn(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
+    race: bool = False
 
 
 class ManualVersionIn(BaseModel):
@@ -77,6 +78,7 @@ def get_project(project_id: str, user: CurrentUser, db: DbSession) -> dict:
         "messages": [message_out(m) for m in project.messages],
         "versions": [version_out(v, include_files=False) for v in reversed(project.versions)],
         "latest_version": version_out(latest) if latest else None,
+        "share": share_out(project.share) if project.share else None,
     }
 
 
@@ -97,7 +99,11 @@ def get_version(version_id: str, user: CurrentUser, db: DbSession) -> dict:
 def restore_version(version_id: str, user: CurrentUser, db: DbSession) -> dict:
     old = _get_version(db, user, version_id)
     project = _get_project(db, user, old.project_id)
-    version = create_version(db, project, dict(old.files), "restore", f"回滚到 v{old.number}")
+    if old.source == "race":
+        summary = f"采用 Race 方案 v{old.number}（{old.label}）"
+        version = create_version(db, project, dict(old.files), "ai", summary, label=old.label)
+    else:
+        version = create_version(db, project, dict(old.files), "restore", f"回滚到 v{old.number}")
     return version_out(version)
 
 
@@ -121,6 +127,7 @@ def send_message(
     user: CurrentUser,
     db: DbSession,
     llm: Annotated[LLM, Depends(get_llm)],
+    race_lanes: Annotated[list[RaceLane], Depends(get_race_lanes)],
 ) -> StreamingResponse:
     project = _get_project(db, user, project_id)
     limit = get_settings().user_generation_limit
@@ -133,7 +140,8 @@ def send_message(
         # The request-scoped session may close before streaming ends, so use our own.
         with SessionLocal() as run_db:
             run_project = run_db.get(Project, project.id)
-            async for event in run_pipeline(run_db, run_project, body.content.strip(), llm):
+            lanes = race_lanes if body.race else None
+            async for event in run_pipeline(run_db, run_project, body.content.strip(), llm, lanes):
                 yield (json.dumps(event, ensure_ascii=False) + "\n").encode()
 
     return StreamingResponse(

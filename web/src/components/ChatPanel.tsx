@@ -1,9 +1,9 @@
 import clsx from 'clsx'
-import { ArrowUp, Check, FileCode2, Loader2, Square } from 'lucide-react'
+import { ArrowUp, Check, FileCode2, Loader2, Square, Swords, Timer } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import Markdown from 'react-markdown'
 import type { LiveTurn } from '../hooks/useAgentRun'
-import type { Message } from '../lib/api'
+import type { Message, RunStats } from '../lib/api'
 import { AGENTS } from '../lib/agents'
 import AgentAvatar from './AgentAvatar'
 
@@ -12,14 +12,16 @@ interface Props {
   live: LiveTurn | null
   running: boolean
   versionNumbers: Record<string, number>
-  onSend: (text: string) => void
+  stats: RunStats | null
+  onSend: (text: string, race: boolean) => void
   onStop: () => void
   onOpenVersion: (versionId: string) => void
 }
 
 export default function ChatPanel(props: Props) {
-  const { messages, live, running, versionNumbers, onSend, onStop, onOpenVersion } = props
+  const { messages, live, running, versionNumbers, stats, onSend, onStop, onOpenVersion } = props
   const [input, setInput] = useState('')
+  const [race, setRace] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -29,8 +31,9 @@ export default function ChatPanel(props: Props) {
 
   function send() {
     if (!input.trim() || running) return
-    onSend(input.trim())
+    onSend(input.trim(), race)
     setInput('')
+    setRace(false)
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -58,6 +61,12 @@ export default function ChatPanel(props: Props) {
       </div>
 
       <div className="border-t border-zinc-200 p-3">
+        {stats && !running && (
+          <p className="mb-2 flex items-center gap-1 text-[11px] text-zinc-400">
+            <Timer className="size-3" /> 上一轮用时 {(stats.duration_ms / 1000).toFixed(1)} 秒
+            {stats.tokens > 0 && ` · ${stats.tokens.toLocaleString()} tokens`}
+          </p>
+        )}
         <div className="rounded-xl border border-zinc-300 bg-white p-2 focus-within:border-violet-400">
           <textarea
             rows={2}
@@ -67,7 +76,8 @@ export default function ChatPanel(props: Props) {
             placeholder={running ? '团队正在工作…' : '继续提需求，例如：加一个深色模式'}
             className="w-full resize-none px-1 text-sm outline-none"
           />
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <RaceToggle on={race} onChange={setRace} disabled={running} />
             {running ? (
               <button
                 onClick={onStop}
@@ -90,6 +100,33 @@ export default function ChatPanel(props: Props) {
         </div>
       </div>
     </div>
+  )
+}
+
+export function RaceToggle({
+  on,
+  onChange,
+  disabled,
+}: {
+  on: boolean
+  onChange: (on: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      title="多个方案并行生成，生成后对比预览、择优采用。仅在新建或推倒重做时生效，消耗 2 次额度"
+      className={clsx(
+        'flex items-center gap-1 rounded-full px-2.5 py-1 text-xs disabled:opacity-40',
+        on
+          ? 'bg-violet-600 text-white'
+          : 'bg-zinc-100 text-zinc-500 hover:bg-violet-50 hover:text-violet-700',
+      )}
+    >
+      <Swords className="size-3.5" /> Race ×2
+    </button>
   )
 }
 

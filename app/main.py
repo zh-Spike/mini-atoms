@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import auth, projects
+from app.api import auth, projects, share
 from app.auth import sync_invite_codes
 from app.config import get_settings
 from app.db import SessionLocal, init_db
@@ -26,6 +26,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(projects.router)
+app.include_router(share.router)
 
 
 @app.get("/healthz")

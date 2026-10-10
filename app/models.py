@@ -51,6 +51,7 @@ class Project(Base):
     versions: Mapped[list["Version"]] = relationship(
         back_populates="project", cascade="all, delete-orphan", order_by="Version.number"
     )
+    share: Mapped["Share | None"] = relationship(cascade="all, delete-orphan")
 
 
 class Version(Base):
@@ -60,7 +61,8 @@ class Version(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     number: Mapped[int] = mapped_column(Integer)
     files: Mapped[dict[str, str]] = mapped_column(JSON)
-    source: Mapped[str] = mapped_column(String(16), default="ai")  # ai | manual | restore
+    source: Mapped[str] = mapped_column(String(16), default="ai")  # ai | manual | restore | race
+    label: Mapped[str | None] = mapped_column(String(64), nullable=True)
     summary: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
@@ -79,3 +81,16 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     project: Mapped[Project] = relationship(back_populates="messages")
+
+
+class Share(Base):
+    __tablename__ = "shares"
+
+    slug: Mapped[str] = mapped_column(String(16), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), unique=True)
+    version_id: Mapped[str] = mapped_column(ForeignKey("versions.id"))
+    views: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    version: Mapped[Version] = relationship()

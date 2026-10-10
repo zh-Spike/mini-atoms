@@ -9,4 +9,9 @@ export function formatTime(iso: string): string {
   })
 }
 
-export const SOURCE_LABEL = { ai: 'AI 生成', manual: '手动编辑', restore: '回滚' } as const
+export const SOURCE_LABEL = {
+  ai: 'AI 生成',
+  manual: '手动编辑',
+  restore: '回滚',
+  race: 'Race 候选',
+} as const
