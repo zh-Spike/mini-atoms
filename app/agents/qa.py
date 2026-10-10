@@ -2,6 +2,8 @@
 
 import posixpath
 import re
+from functools import cache
+from pathlib import Path
 
 ENTRY = "/App.js"
 ALLOWED_PACKAGES = {
@@ -17,6 +19,61 @@ IMPORT_RE = re.compile(
     r"""(?:import\s+(?:[\w*{}\s,]+\s+from\s+)?|import\s*\(\s*|require\s*\(\s*)['"]([^'"]+)['"]"""
 )
 RESOLVE_SUFFIXES = ("", ".js", ".jsx", "/index.js", "/index.jsx")
+# `import Default, { a, b as c } from "x"`; namespace imports are not checked.
+IMPORT_CLAUSE_RE = re.compile(
+    r"""import\s+(?:([\w$]+)\s*,?\s*)?(?:\{([^}]*)\}\s*)?from\s*['"]([^'"]+)['"]"""
+)
+LUCIDE_ICONS_FILE = Path(__file__).with_name("lucide_icons.txt")
+
+
+@cache
+def lucide_icons() -> frozenset[str]:
+    lines = LUCIDE_ICONS_FILE.read_text().splitlines()
+    return frozenset(line for line in lines if line and not line.startswith("#"))
+
+
+def _is_lucide_icon(name: str) -> bool:
+    if name in ("Icon", "createLucideIcon", "icons"):
+        return True
+    base = name.removeprefix("Lucide").removesuffix("Icon")
+    return base in lucide_icons()
+
+
+def _named(clause: str) -> list[str]:
+    return [p.split(" as ")[0].strip() for p in clause.split(",") if p.strip()]
+
+
+def _exports_name(src: str, name: str) -> bool:
+    n = re.escape(name)
+    decl = rf"export\s+(?:async\s+)?(?:function\s*\*?|const|let|var|class)\s+{n}\b"
+    return bool(re.search(decl, src) or re.search(rf"export\s*\{{[^}}]*\b{n}\b[^}}]*\}}", src))
+
+
+def _import_issues(path: str, src: str, files: dict[str, str]) -> list[str]:
+    """Imported names that do not exist: hallucinated icons, default/named mix-ups."""
+    issues: list[str] = []
+    for default, named, spec in IMPORT_CLAUSE_RE.findall(src):
+        names = _named(named)
+        if spec == "lucide-react":
+            bad = [n for n in names if not _is_lucide_icon(n)]
+            if bad:
+                icons = "、".join(bad)
+                issues.append(
+                    f"{path} 从 lucide-react 引入了不存在的图标 {icons}，请换成真实存在的图标"
+                )
+            continue
+        if not spec.startswith((".", "/")):
+            continue
+        target = resolve(path, spec, files)
+        if target is None:
+            continue
+        target_src = files[target]
+        if default and "export default" not in target_src:
+            issues.append(f"{path} 默认导入了 {spec}，但 {target} 没有 default export")
+        missing = [n for n in names if n != "default" and not _exports_name(target_src, n)]
+        if missing:
+            issues.append(f"{path} 从 {spec} 引入的 {'、'.join(missing)} 在 {target} 中没有导出")
+    return issues
 
 
 def package_name(spec: str) -> str:
@@ -62,4 +119,5 @@ def check_project(files: dict[str, str]) -> list[str]:
                     issues.append(f"{path} 引用了不存在的文件 {spec}")
             elif package_name(spec) not in ALLOWED_PACKAGES:
                 issues.append(f"{path} 使用了不允许的依赖 {spec}")
+        issues.extend(_import_issues(path, src, files))
     return issues

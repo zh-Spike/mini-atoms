@@ -97,7 +97,12 @@ function LaneColumn({ index, lane }: { index: number; lane: LaneState }) {
         ref={preRef}
         className="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-zinc-300"
       >
-        {code}
+        {code ||
+          (lane.thinking && !lane.finished && (
+            <span className="text-zinc-500 italic">
+              {AGENTS[lane.agent ?? 'alex'].name} 正在思考：{lane.thinking}
+            </span>
+          ))}
         {!lane.finished && (
           <span className="inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-sky-400" />
         )}

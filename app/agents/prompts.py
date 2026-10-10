@@ -56,7 +56,8 @@ _ALEX_RULES = f"""输出格式（必须严格遵守）：
 技术约束：
 - 纯 JavaScript + JSX（不要 TypeScript），React 18 函数组件和 Hooks。
 - 样式使用 Tailwind CSS class（已全局加载，darkMode 为 'class'，深色模式通过给 document.documentElement 加 dark class 实现）。需要额外样式时写在 /styles.css（运行环境会自动引入，不需要 import）。
-- 只能 import 这些包：{", ".join(sorted(ALLOWED_PACKAGES))}。图标用 lucide-react。
+- 只能 import 这些包：{", ".join(sorted(ALLOWED_PACKAGES))}。图标用 lucide-react，图标名必须真实存在（如 Timer、Coffee、Play、Plus、Trash2、Check），拿不准就换成常见图标，不要自造名字。
+- 文件之间的导入导出要一致：`import X from` 对应 `export default`，`import {{ X }} from` 对应具名导出。
 - 需要持久化的数据存 localStorage，key 加上应用前缀，读取时做好容错。
 - 界面默认中文，现代、精致、留白充足，有空状态和合理的示例数据，适配移动端。
 - 代码必须可以直接运行，不要留 TODO 或省略号。"""
