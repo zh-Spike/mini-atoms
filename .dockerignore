@@ -4,6 +4,9 @@
 .agents
 .cursor
 node_modules
+web/node_modules
+web/dist
+app/static
 tests
 __pycache__
 *.py[cod]
@@ -14,6 +17,6 @@ __pycache__
 .neon
 *.db
 neon.ts
-package.json
-package-lock.json
+/package.json
+/package-lock.json
 skills-lock.json
