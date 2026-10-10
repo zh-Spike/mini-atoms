@@ -71,6 +71,7 @@ export default function Projects() {
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <Logo />
         <div className="flex items-center gap-4 text-sm text-zinc-500">
+          {me && <span className="text-zinc-900">{me.username}</span>}
           <span>
             剩余生成次数 <b className="text-zinc-900">{quotaLeft}</b>
           </span>

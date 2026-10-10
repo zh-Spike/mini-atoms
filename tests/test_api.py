@@ -2,27 +2,56 @@ import json
 
 from fastapi.testclient import TestClient
 
+from tests.conftest import register
+
 
 def _events(resp) -> list[dict]:
     return [json.loads(line) for line in resp.text.splitlines() if line.strip()]
 
 
-def test_requires_invite(client: TestClient) -> None:
+def test_requires_login(client: TestClient) -> None:
     client.cookies.clear()
     assert client.get("/api/auth/me").status_code == 401
     assert client.get("/api/projects").status_code == 401
 
 
 def test_invalid_and_exhausted_invite(client: TestClient) -> None:
-    assert client.post("/api/auth/invite", json={"code": "NOPE"}).status_code == 400
-    assert client.post("/api/auth/invite", json={"code": "ONCE"}).status_code == 200
-    assert client.post("/api/auth/invite", json={"code": "ONCE"}).status_code == 400
+    assert register(client, code="NOPE").status_code == 400
+    assert register(client, code="ONCE").status_code == 200
+    assert register(client, code="ONCE").status_code == 400
 
 
-def test_projects_are_isolated_per_guest(authed: TestClient) -> None:
+def test_register_validation(client: TestClient) -> None:
+    def reg(username: str, password: str) -> int:
+        body = {"invite_code": "TEST", "username": username, "password": password}
+        return client.post("/api/auth/register", json=body).status_code
+
+    assert reg("ab", "secret123") == 422
+    assert reg("bad name", "secret123") == 422
+    assert reg("shortpw", "123") == 422
+    assert reg("Alice", "secret123") == 200
+    assert reg("alice", "another1") == 409
+
+
+def test_login_with_account(client: TestClient) -> None:
+    client.cookies.clear()
+    body = {"invite_code": "TEST", "username": "bob_1", "password": "secret123"}
+    assert client.post("/api/auth/register", json=body).status_code == 200
+    pid = client.post("/api/projects", json={"prompt": "待办清单"}).json()["id"]
+    client.post("/api/auth/logout")
+    client.cookies.clear()
+
+    bad = client.post("/api/auth/login", json={"username": "bob_1", "password": "wrong"})
+    assert bad.status_code == 401
+    resp = client.post("/api/auth/login", json={"username": "BOB_1", "password": "secret123"})
+    assert resp.status_code == 200 and resp.json()["username"] == "bob_1"
+    assert client.get(f"/api/projects/{pid}").status_code == 200
+
+
+def test_projects_are_isolated_per_user(authed: TestClient) -> None:
     pid = authed.post("/api/projects", json={"prompt": "待办清单"}).json()["id"]
     authed.cookies.clear()
-    authed.post("/api/auth/invite", json={"code": "TEST"})
+    register(authed)
     assert authed.get(f"/api/projects/{pid}").status_code == 404
 
 
@@ -106,7 +135,7 @@ def test_manual_version(authed: TestClient) -> None:
 
 def test_generation_limit(client: TestClient, fake_llm) -> None:
     client.cookies.clear()
-    client.post("/api/auth/invite", json={"code": "TEST"})
+    register(client)
     pid = client.post("/api/projects", json={"prompt": "x"}).json()["id"]
     codes = [
         client.post(f"/api/projects/{pid}/messages", json={"content": "x"}).status_code

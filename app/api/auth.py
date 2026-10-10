@@ -1,35 +1,56 @@
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
-from app.auth import COOKIE_NAME, CurrentGuest, DbSession, redeem_invite, set_session_cookie
+from app.auth import (
+    COOKIE_NAME,
+    CurrentUser,
+    DbSession,
+    authenticate,
+    register_user,
+    set_session_cookie,
+)
 from app.config import get_settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-class InviteIn(BaseModel):
-    code: str = Field(min_length=1, max_length=64)
+class LoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=32)
+    password: str = Field(min_length=1, max_length=128)
 
 
-def _me(guest) -> dict:
+class RegisterIn(BaseModel):
+    invite_code: str = Field(min_length=1, max_length=64)
+    username: str = Field(min_length=3, max_length=32, pattern=r"^\s*[A-Za-z0-9_]+\s*$")
+    password: str = Field(min_length=6, max_length=128)
+
+
+def _me(user) -> dict:
     return {
-        "guest_id": guest.id,
-        "invite_code": guest.invite_code,
-        "generations_used": guest.generations_used,
-        "generation_limit": get_settings().guest_generation_limit,
+        "user_id": user.id,
+        "username": user.username,
+        "generations_used": user.generations_used,
+        "generation_limit": get_settings().user_generation_limit,
     }
 
 
-@router.post("/invite")
-def invite(body: InviteIn, request: Request, response: Response, db: DbSession) -> dict:
-    guest = redeem_invite(db, body.code)
-    set_session_cookie(response, guest.id, secure=request.url.scheme == "https")
-    return _me(guest)
+@router.post("/register")
+def register(body: RegisterIn, request: Request, response: Response, db: DbSession) -> dict:
+    user = register_user(db, body.invite_code, body.username, body.password)
+    set_session_cookie(response, user.id, secure=request.url.scheme == "https")
+    return _me(user)
+
+
+@router.post("/login")
+def login(body: LoginIn, request: Request, response: Response, db: DbSession) -> dict:
+    user = authenticate(db, body.username, body.password)
+    set_session_cookie(response, user.id, secure=request.url.scheme == "https")
+    return _me(user)
 
 
 @router.get("/me")
-def me(guest: CurrentGuest) -> dict:
-    return _me(guest)
+def me(user: CurrentUser) -> dict:
+    return _me(user)
 
 
 @router.post("/logout")
