@@ -40,4 +40,5 @@ feature branch -> PR -> CI (lint, tests, docker build) -> squash merge to main
 - `Dockerfile` builds the app image; `docker-compose.yml` runs it on the server (port 80, auto-restart).
 - `.github/workflows/deploy.yml` runs only after CI succeeds on `main`, or manually via *Run workflow*.
 - Runtime secrets (`DATABASE_URL`, `LLM_*`) live in `/opt/mini-atoms/.env` on the server, never in the repo.
-- GitHub Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`.
+- GitHub variable `DEPLOY_HOST`; secrets `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`.
+- Roll back: *Actions → Deploy → Run workflow* with an older commit SHA.
