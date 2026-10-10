@@ -44,4 +44,5 @@ feature branch -> PR -> CI (lint, tests, docker build) -> squash merge to main
   - variables: `LLM_BASE_URL`, `LLM_MODEL`
   - To change one: update it under *Settings → Environments → production*, then re-run *Deploy*. To add a new key, also add it to the *Upload runtime config* step.
 - Deploy access: repo variable `DEPLOY_HOST`; repo secrets `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`.
-- Roll back: *Actions → Deploy → Run workflow* with an older commit SHA.
+- Roll back: *Actions → Deploy → Run workflow* with an older commit SHA. Only commits already on `main` can be deployed.
+- The `production` environment (and its secrets) is restricted to the `main` branch. Third-party actions are pinned to commit SHAs.
