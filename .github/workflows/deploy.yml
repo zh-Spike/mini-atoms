@@ -74,6 +74,20 @@ jobs:
             IdentitiesOnly yes
           EOF
 
+      - name: Upload runtime config
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+        run: |
+          KEYS="DATABASE_URL LLM_API_KEY LLM_BASE_URL LLM_MODEL"
+          for k in $KEYS; do
+            [ -n "${!k}" ] || { echo "::error::Missing production config: $k"; exit 1; }
+          done
+          for k in $KEYS; do printf '%s=%s\n' "$k" "${!k}"; done \
+            | ssh prod "umask 077 && cat > ${APP_DIR}/.env.new && mv ${APP_DIR}/.env.new ${APP_DIR}/.env"
+
       - name: Deploy to server
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
