@@ -8,10 +8,16 @@ import { AGENTS, PIPELINE } from '../lib/agents'
 import { FullScreenSpinner } from '../lib/auth'
 import { useAuth } from '../lib/useAuth'
 
+const INPUT =
+  'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100'
+
 export default function Landing() {
   const { me, loading, setMe } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -20,13 +26,36 @@ export default function Landing() {
   if (loading) return <FullScreenSpinner />
   if (me) return <Navigate to={from} replace />
 
+  const isRegister = mode === 'register'
+  const canSubmit = username.trim() && password && (!isRegister || code.trim())
+
+  function switchMode(next: 'login' | 'register') {
+    setMode(next)
+    setError('')
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!code.trim()) return
+    if (!canSubmit) return
+    const name = username.trim()
+    if (isRegister) {
+      if (!/^[A-Za-z0-9_]{3,32}$/.test(name)) {
+        setError('用户名需为 3-32 位字母、数字或下划线')
+        return
+      }
+      if (password.length < 6) {
+        setError('密码至少 6 位')
+        return
+      }
+    }
     setSubmitting(true)
     setError('')
     try {
-      setMe(await api.invite(code.trim()))
+      setMe(
+        isRegister
+          ? await api.register(code.trim(), name, password)
+          : await api.login(name, password),
+      )
       navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '网络错误，请重试')
@@ -82,27 +111,60 @@ export default function Landing() {
           onSubmit={submit}
           className="mt-12 w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-left shadow-lg shadow-violet-100"
         >
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <KeyRound className="size-4 text-violet-600" /> 输入邀请码开始体验
-          </label>
-          <div className="mt-3 flex gap-2">
+          <div className="flex rounded-lg bg-zinc-100 p-1 text-sm">
+            {(['login', 'register'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => switchMode(m)}
+                className={`flex-1 rounded-md py-1.5 font-medium ${
+                  mode === m ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+                }`}
+              >
+                {m === 'login' ? '登录' : '注册'}
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 space-y-3">
             <input
               autoFocus
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="邀请码"
-              className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="用户名"
+              autoComplete="username"
+              className={INPUT}
             />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={isRegister ? '密码（至少 6 位）' : '密码'}
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              className={INPUT}
+            />
+            {isRegister && (
+              <div className="relative">
+                <KeyRound className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-violet-600" />
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="邀请码"
+                  className={`${INPUT} pl-9`}
+                />
+              </div>
+            )}
             <button
-              disabled={submitting || !code.trim()}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+              disabled={submitting || !canSubmit}
+              className="w-full rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
             >
-              {submitting ? '验证中…' : '进入'}
+              {submitting ? '请稍候…' : isRegister ? '注册并进入' : '登录'}
             </button>
           </div>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
           <p className="mt-3 text-xs text-zinc-400">
-            邀请码用于控制模型调用成本。你的项目会保存在服务端，30 天内用同一浏览器可继续访问。
+            {isRegister
+              ? '注册需要邀请码，用于控制模型调用成本。注册后用账号登录即可，在任何设备上都能访问你的项目。'
+              : '还没有账号？切换到「注册」，用邀请码创建账号。'}
           </p>
         </form>
       </main>

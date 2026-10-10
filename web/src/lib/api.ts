@@ -1,8 +1,8 @@
 export type Files = Record<string, string>
 
 export interface Me {
-  guest_id: string
-  invite_code: string
+  user_id: string
+  username: string
   generations_used: number
   generation_limit: number
 }
@@ -90,7 +90,10 @@ async function toError(resp: Response): Promise<ApiError> {
 
 export const api = {
   me: () => request<Me>('GET', '/api/auth/me'),
-  invite: (code: string) => request<Me>('POST', '/api/auth/invite', { code }),
+  login: (username: string, password: string) =>
+    request<Me>('POST', '/api/auth/login', { username, password }),
+  register: (inviteCode: string, username: string, password: string) =>
+    request<Me>('POST', '/api/auth/register', { invite_code: inviteCode, username, password }),
   logout: () => request<{ ok: boolean }>('POST', '/api/auth/logout'),
   listProjects: () => request<ProjectSummary[]>('GET', '/api/projects'),
   createProject: (prompt: string) => request<ProjectSummary>('POST', '/api/projects', { prompt }),

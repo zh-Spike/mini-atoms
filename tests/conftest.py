@@ -1,12 +1,13 @@
 import os
 import tempfile
+import uuid
 from collections.abc import AsyncIterator, Iterator
 
 _db_dir = tempfile.mkdtemp()
 os.environ["DATABASE_URL"] = f"sqlite:///{_db_dir}/test.db"
 os.environ["INVITE_CODES"] = "TEST:100,ONCE:1"
 os.environ["SECRET_KEY"] = "test-secret"
-os.environ["GUEST_GENERATION_LIMIT"] = "5"
+os.environ["USER_GENERATION_LIMIT"] = "5"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -70,8 +71,17 @@ def client() -> Iterator[TestClient]:
         yield c
 
 
+def register(client: TestClient, code: str = "TEST", password: str = "secret123"):
+    username = f"u{uuid.uuid4().hex[:12]}"
+    return client.post(
+        "/api/auth/register",
+        json={"invite_code": code, "username": username, "password": password},
+    )
+
+
 @pytest.fixture
 def authed(client: TestClient) -> TestClient:
-    resp = client.post("/api/auth/invite", json={"code": "TEST"})
+    client.cookies.clear()
+    resp = register(client)
     assert resp.status_code == 200
     return client

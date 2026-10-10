@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-change-me"
     # Comma-separated "CODE:max_uses" pairs, e.g. "ROOT2026:50,DEMO:10".
     invite_codes: str = "DEMO:100"
-    # AI runs allowed per guest session.
-    guest_generation_limit: int = 30
+    # AI runs allowed per account.
+    user_generation_limit: int = 30
 
 
 @lru_cache
