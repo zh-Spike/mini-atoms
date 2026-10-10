@@ -41,6 +41,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate compose file and Caddyfile
         run: |
+          touch .env
           SITE_ADDRESS=example.sslip.io docker compose config --quiet
           docker run --rm -e SITE_ADDRESS=example.sslip.io \
             -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine \
