@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment:
       name: production
-      url: http://${{ vars.DEPLOY_HOST }}
+      url: https://${{ vars.SITE_ADDRESS }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,8 +88,9 @@ jobs:
           INVITE_CODES: ${{ secrets.INVITE_CODES }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
+          SITE_ADDRESS: ${{ vars.SITE_ADDRESS }}
         run: |
-          KEYS="DATABASE_URL LLM_API_KEY SECRET_KEY INVITE_CODES LLM_BASE_URL LLM_MODEL"
+          KEYS="DATABASE_URL LLM_API_KEY SECRET_KEY INVITE_CODES LLM_BASE_URL LLM_MODEL SITE_ADDRESS"
           for k in $KEYS; do
             [ -n "${!k}" ] || { echo "::error::Missing production config: $k"; exit 1; }
           done
@@ -100,24 +101,26 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          scp docker-compose.yml prod:${APP_DIR}/docker-compose.yml
+          scp docker-compose.yml Caddyfile prod:${APP_DIR}/
           echo "$GHCR_TOKEN" | ssh prod "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
           ssh prod "cd ${APP_DIR} \
             && IMAGE_TAG=${IMAGE_TAG} docker compose pull \
             && IMAGE_TAG=${IMAGE_TAG} docker compose up -d --remove-orphans \
+            && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
             && docker logout ghcr.io \
             && docker image prune -f"
 
       - name: Health check
         env:
-          BASE: http://${{ vars.DEPLOY_HOST }}
+          BASE: https://${{ vars.SITE_ADDRESS }}
         run: |
           check() {
             curl -fsS --max-time 5 "$BASE/healthz" >/dev/null \
               && curl -fsS --max-time 5 "$BASE/" | grep -q '<div id="root">' \
               && [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/api/auth/me")" = 401 ]
           }
-          for i in $(seq 1 20); do
+          # The first deploy waits for Caddy to obtain the TLS certificate.
+          for i in $(seq 1 40); do
             if check; then
               echo "Deployed ${IMAGE_TAG}: API, SPA and auth guard are up"; exit 0
             fi

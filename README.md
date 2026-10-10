@@ -107,14 +107,18 @@ cd web && npm run lint && npm run typecheck && npm run build
 ```
 feature 分支 -> PR -> CI（后端检查、前端检查、Docker 构建）-> squash merge 到 main
   -> main 上 CI 通过 -> Deploy：构建并推送 ghcr.io 镜像 -> SSH 到服务器
-  -> docker compose pull && up -d -> 健康检查（/healthz、SPA 首页、未登录 /api/auth/me 返回 401）
+  -> docker compose pull && up -d -> 通过 HTTPS 做健康检查（/healthz、SPA 首页、未登录 /api/auth/me 返回 401）
 ```
 
+- 线上地址：https://43-161-240-115.sslip.io 。[sslip.io](https://sslip.io) 把 IP 形式的子域名解析回这个 IP，从而不用买域名也能申请证书。直接用 IP 的 HTTP 访问仍然可用，作为兜底。
+- `docker-compose.yml` 包含两个服务：`web`（应用，只在内部网络暴露 8000 端口）和 `caddy`（监听 80/443 的反向代理）。Caddy 会为 `SITE_ADDRESS` 自动申请并续期 Let's Encrypt 证书，证书保存在 `caddy_data` 卷里。
+- 必须用 HTTPS 的原因：浏览器只在安全上下文（HTTPS 或 localhost）里提供 `crypto.subtle` 等 API，Sandpack 依赖这些 API；前端对 HTTP 环境也做了兼容补丁。
 - `Dockerfile` 是多阶段构建：先用 Node 构建前端，再把 `web/dist` 拷贝进 Python 镜像，由 FastAPI 托管。
 - 运行时配置在 GitHub `production` 环境中管理，每次部署写入服务器的 `/opt/mini-atoms/.env`（权限 600）。任何一项缺失，部署都会在重启服务之前失败。
   - secrets：`DATABASE_URL`、`LLM_API_KEY`、`SECRET_KEY`、`INVITE_CODES`
-  - variables：`LLM_BASE_URL`、`LLM_MODEL`
+  - variables：`LLM_BASE_URL`、`LLM_MODEL`、`SITE_ADDRESS`（HTTPS 域名，如 `43-161-240-115.sslip.io`）
   - 修改方式：在 *Settings → Environments → production* 中更新，然后重新运行 *Deploy*。新增配置项时，还需要加到 deploy 工作流的 *Upload runtime config* 步骤。
+- 服务器防火墙需要放行 TCP 80、443（Caddy 申请证书和提供 HTTPS 都需要）。
 - 部署权限：仓库 variable `DEPLOY_HOST`；仓库 secrets `DEPLOY_USER`、`DEPLOY_SSH_KEY`、`DEPLOY_KNOWN_HOSTS`。
 - 回滚：*Actions → Deploy → Run workflow*，填入旧的 commit SHA。只能部署已经在 `main` 上的提交。
 - `production` 环境及其 secrets 只对 `main` 分支开放，第三方 Action 都固定到 commit SHA。
