@@ -1,0 +1,14 @@
+# HTTPS via an automatic Let's Encrypt certificate for SITE_ADDRESS (e.g. 1-2-3-4.sslip.io).
+{$SITE_ADDRESS} {
+	reverse_proxy web:8000 {
+		# Agent runs stream NDJSON; pass every chunk through immediately.
+		flush_interval -1
+	}
+}
+
+# Plain HTTP on the bare IP keeps working as a fallback.
+:80 {
+	reverse_proxy web:8000 {
+		flush_interval -1
+	}
+}
