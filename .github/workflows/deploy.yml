@@ -84,10 +84,12 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          INVITE_CODES: ${{ secrets.INVITE_CODES }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
-          KEYS="DATABASE_URL LLM_API_KEY LLM_BASE_URL LLM_MODEL"
+          KEYS="DATABASE_URL LLM_API_KEY SECRET_KEY INVITE_CODES LLM_BASE_URL LLM_MODEL"
           for k in $KEYS; do
             [ -n "${!k}" ] || { echo "::error::Missing production config: $k"; exit 1; }
           done
@@ -107,10 +109,17 @@ jobs:
             && docker image prune -f"
 
       - name: Health check
+        env:
+          BASE: http://${{ vars.DEPLOY_HOST }}
         run: |
+          check() {
+            curl -fsS --max-time 5 "$BASE/healthz" >/dev/null \
+              && curl -fsS --max-time 5 "$BASE/" | grep -q '<div id="root">' \
+              && [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/api/auth/me")" = 401 ]
+          }
           for i in $(seq 1 20); do
-            if curl -fsS --max-time 5 "http://${{ vars.DEPLOY_HOST }}/healthz"; then
-              echo; echo "Deployed ${IMAGE_TAG}"; exit 0
+            if check; then
+              echo "Deployed ${IMAGE_TAG}: API, SPA and auth guard are up"; exit 0
             fi
             sleep 3
           done

@@ -11,3 +11,4 @@ __pycache__/
 *.log
 .neon
 node_modules/
+app/static/

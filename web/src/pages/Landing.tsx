@@ -1,0 +1,111 @@
+import { ArrowRight, KeyRound } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import AgentAvatar from '../components/AgentAvatar'
+import Logo from '../components/Logo'
+import { api, ApiError } from '../lib/api'
+import { AGENTS, PIPELINE } from '../lib/agents'
+import { FullScreenSpinner } from '../lib/auth'
+import { useAuth } from '../lib/useAuth'
+
+export default function Landing() {
+  const { me, loading, setMe } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [code, setCode] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const from = (location.state as { from?: string } | null)?.from ?? '/projects'
+
+  if (loading) return <FullScreenSpinner />
+  if (me) return <Navigate to={from} replace />
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!code.trim()) return
+    setSubmitting(true)
+    setError('')
+    try {
+      setMe(await api.invite(code.trim()))
+      navigate(from, { replace: true })
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '网络错误，请重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="relative min-h-full overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 -top-40 h-[480px] bg-gradient-to-b from-violet-200/60 via-fuchsia-100/40 to-transparent blur-3xl" />
+      <header className="relative mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+        <Logo to="/" />
+        <a
+          href="https://github.com/zh-Spike/mini-atoms"
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm text-zinc-500 hover:text-zinc-900"
+        >
+          GitHub
+        </a>
+      </header>
+
+      <main className="relative mx-auto flex max-w-3xl flex-col items-center px-6 pt-16 pb-24 text-center">
+        <span className="rounded-full border border-violet-200 bg-white/70 px-3 py-1 text-xs text-violet-700">
+          AI 智能体团队 · 一句话生成可运行的应用
+        </span>
+        <h1 className="mt-6 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+          把想法交给你的
+          <span className="bg-gradient-to-r from-violet-600 to-fuchsia-500 bg-clip-text text-transparent">
+            {' '}
+            AI 软件团队
+          </span>
+        </h1>
+        <p className="mt-4 max-w-xl text-zinc-600">
+          描述你想要的应用，产品经理写 PRD、架构师做设计、工程师写代码、测试把关质量，
+          几十秒后就能在浏览器里直接使用，并继续用对话迭代。
+        </p>
+
+        <div className="mt-8 flex items-center gap-3">
+          {PIPELINE.map((id, i) => (
+            <div key={id} className="flex items-center gap-3">
+              <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white py-1 pr-3 pl-1 shadow-sm">
+                <AgentAvatar agent={id} size="sm" />
+                <span className="text-xs text-zinc-600">{AGENTS[id].role}</span>
+              </div>
+              {i < PIPELINE.length - 1 && <ArrowRight className="size-3.5 text-zinc-300" />}
+            </div>
+          ))}
+        </div>
+
+        <form
+          onSubmit={submit}
+          className="mt-12 w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-left shadow-lg shadow-violet-100"
+        >
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <KeyRound className="size-4 text-violet-600" /> 输入邀请码开始体验
+          </label>
+          <div className="mt-3 flex gap-2">
+            <input
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="邀请码"
+              className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+            />
+            <button
+              disabled={submitting || !code.trim()}
+              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+            >
+              {submitting ? '验证中…' : '进入'}
+            </button>
+          </div>
+          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          <p className="mt-3 text-xs text-zinc-400">
+            邀请码用于控制模型调用成本。你的项目会保存在服务端，30 天内用同一浏览器可继续访问。
+          </p>
+        </form>
+      </main>
+    </div>
+  )
+}
