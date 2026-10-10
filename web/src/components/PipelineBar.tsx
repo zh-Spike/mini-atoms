@@ -22,7 +22,7 @@ export default function PipelineBar({
           <div key={id} className="flex items-center gap-1">
             <span
               className={clsx(
-                'flex items-center gap-1 rounded-full px-2 py-0.5',
+                'flex items-center gap-1 rounded-full px-2 py-0.5 whitespace-nowrap',
                 isActive && 'bg-violet-100 text-violet-700',
                 done && 'text-emerald-600',
                 !isActive && !done && 'text-zinc-400',
