@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,7 +8,7 @@ from app.agents import tracing
 from app.api import status as status_api
 from app.config import get_settings
 from app.db import SessionLocal
-from app.models import LLMCall, Run
+from app.models import LLMCall, Run, Version
 from tests.conftest import register
 
 
@@ -173,6 +174,35 @@ def test_admin_overview_runs_and_trace(authed: TestClient, usage_llm, as_admin) 
 
     trace = authed.get(f"/api/admin/runs/{run_id}").json()
     assert trace["calls"][0]["messages"][0]["role"] == "system"
+
+
+def test_race_adoptions_before_tracing_are_not_counted(
+    authed: TestClient, fake_llm, as_admin
+) -> None:
+    pid = _project(authed)
+    events = _send(authed, pid, race=True)
+    tracing.flush()
+    as_admin(authed)
+    before = authed.get("/api/admin/overview").json()["quality"]["race_adopted"]
+
+    with SessionLocal() as db:
+        first_run = min(r.created_at for r in db.query(Run).all())
+        db.add(
+            Version(
+                project_id=pid,
+                number=99,
+                files={"/App.js": "x"},
+                source="ai",
+                label="legacy-race",
+                created_at=first_run - timedelta(minutes=1),
+            )
+        )
+        db.commit()
+    assert authed.get("/api/admin/overview").json()["quality"]["race_adopted"] == before
+
+    candidate = next(e["version"]["id"] for e in events if e["type"] == "lane_done")
+    authed.post(f"/api/versions/{candidate}/restore")
+    assert authed.get("/api/admin/overview").json()["quality"]["race_adopted"] == before + 1
 
 
 def test_status_is_public(client: TestClient, monkeypatch) -> None:

@@ -36,11 +36,20 @@ def overview(_: AdminUser, db: DbSession, days: int = 7) -> dict:
     names = _usernames(db, set(per_user))
 
     race_runs = [r for r in runs if r.race_lanes > 1]
-    adopted = (
-        db.query(func.count(Version.id))
-        .filter(Version.created_at >= start, Version.source == "ai", Version.label.is_not(None))
-        .scalar()
-    )
+    # Races before tracing existed have no run rows; count only adoptions since then so the
+    # adopted count can be compared with `race_runs`.
+    first_run = db.query(func.min(Run.created_at)).scalar()
+    adopted = 0
+    if first_run is not None:
+        adopted = (
+            db.query(func.count(Version.id))
+            .filter(
+                Version.created_at >= max(start, metrics.aware(first_run)),
+                Version.source == "ai",
+                Version.label.is_not(None),
+            )
+            .scalar()
+        )
     qa_checked = [r for r in runs if r.qa_ok is not None]
     coded_runs = {c.run_id for c in calls if c.agent == "alex"}
     fixed_runs = {c.run_id for c in calls if c.step.endswith("-fix")}
