@@ -2,7 +2,7 @@
 
 一个 [Atoms](https://atoms.dev/) 风格的 AI 应用生成平台 Demo：用一句话描述想要的应用，一支由 AI 智能体组成的软件团队（产品经理、架构师、工程师、测试）协作完成需求梳理、架构设计、编码和检查，生成的 React 应用在浏览器里实时运行，并可以继续用对话迭代、手动改代码、回滚版本。还可以开启 Race 让两个工程师并行写出两版方案对比择优，满意后一键发布成公开链接分享给别人。
 
-**线上体验**：<https://43-161-240-115.sslip.io> · **服务状态**：<https://43-161-240-115.sslip.io/status> · **使用指南（含截图）**：[docs/USAGE.md](docs/USAGE.md) · **提交说明**：[docs/SUBMISSION.md](docs/SUBMISSION.md) · **图文走查**：[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) · **演示视频（2 分 17 秒）**：[mini-atoms-demo.mp4](https://github.com/zh-Spike/mini-atoms/releases/download/demo-2026-10-11/mini-atoms-demo.mp4)
+**线上体验**：<https://43-161-240-115.sslip.io> · **服务状态**：<https://43-161-240-115.sslip.io/status> · **使用指南（含截图）**：[docs/USAGE.md](docs/USAGE.md) · **提交说明**：[docs/SUBMISSION.md](docs/SUBMISSION.md) · **图文走查**：[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) · **AI 协作开发说明**：[docs/AI_WORKFLOW.md](docs/AI_WORKFLOW.md) · **演示视频（2 分 17 秒）**：[mini-atoms-demo.mp4](https://github.com/zh-Spike/mini-atoms/releases/download/demo-2026-10-11/mini-atoms-demo.mp4)
 
 **示例作品（免登录直接用）**：[番茄钟](https://43-161-240-115.sslip.io/s/di8saYac)（Race 采用 + 对话迭代）· [习惯打卡](https://43-161-240-115.sslip.io/s/9_oQDh5p)（演示视频中生成）· [看板](https://43-161-240-115.sslip.io/s/7YEOxY_5) · [记账本](https://43-161-240-115.sslip.io/s/RGa9mbuC)
 
@@ -120,7 +120,7 @@ run_pipeline ──tracer.wrap(llm, agent, step, lane)──▶ TracedLLM ──
 - Race 多方案并行与对比采用、发布分享（公开链接 + 浏览量）、导出 zip、桌面 / 手机预览、移动端工作台、耗时与 token 展示
 - 可观测性与运营：模型调用追踪、每轮明细、用户用量页、管理员运营后台、公开状态页、分享访问分析
 - 演示模式：无 Key 时完整可用，网关故障时自动降级
-- 后端 65 个测试，覆盖解析器、QA（含图标名和导入导出一致性）、鉴权、额度、流水线、Race（含多模型选择、协议切换和参数降级）、发布分享、表结构补列、调用追踪（含修复轮、Race 分路、失败、写库失败不影响生成）、Race 采用统计口径、用量与运营接口权限、状态页、演示模式（预置应用通过 QA、生成与迭代、Race 分路差异、网关故障降级）
+- 后端 68 个测试，覆盖解析器、QA（含图标名和导入导出一致性）、鉴权、额度、流水线、Race（含多模型选择、协议切换和参数降级）、发布分享、表结构补列、调用追踪（含修复轮、Race 分路、失败、写库失败不影响生成）、Race 采用统计口径、用量与运营接口权限、状态页、演示模式（预置应用通过 QA、生成与迭代、Race 分路差异、网关故障降级）、输出上限与无代码时报错
 - CI（后端、前端、Docker 构建）与合并到 main 后自动部署；每 30 分钟的线上巡检（`/healthz`、`/api/status`、首页和分享页，失败时 GitHub 邮件提醒）
 
 未完成 / 已知限制：
