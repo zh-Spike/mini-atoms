@@ -14,8 +14,17 @@ ChunkKind = Literal["think", "text", "notice"]
 MAX_RACE_LANES = 3
 
 # Optional request params some models behind the gateway reject with a 400. Once a model rejects
-# one, it is dropped for that model for the rest of the process. Tried in this order.
-_OPTIONAL_PARAMS = ("extra_body", "reasoning_effort", "reasoning", "stream_options", "temperature")
+# one, it is dropped for that model for the rest of the process. Tried in this order; the output
+# caps come last so they are the last to go.
+_OPTIONAL_PARAMS = (
+    "extra_body",
+    "reasoning_effort",
+    "reasoning",
+    "stream_options",
+    "temperature",
+    "max_tokens",
+    "max_output_tokens",
+)
 _dropped: dict[str, set[str]] = {}
 # Models found at runtime to only speak the Responses API.
 _responses_detected: set[str] = set()
@@ -57,6 +66,7 @@ class OpenAICompatLLM:
         fast = settings.llm_disable_thinking
         self._extra = {"thinking": {"type": "disabled"}} if fast else None
         self._effort = "low" if fast else None
+        self._max_tokens = settings.llm_max_tokens or None
         configured = {m.strip() for m in settings.llm_responses_models.split(",") if m.strip()}
         self._configured_responses = self._model in configured
         self.tokens = 0
@@ -98,19 +108,34 @@ class OpenAICompatLLM:
         except BadRequestError:
             if not extra:
                 raise
-        for name in [p for p in _OPTIONAL_PARAMS if p in extra]:
+        names = [p for p in _OPTIONAL_PARAMS if p in extra]
+        for name in names:
             try:
                 result = await attempt({k: v for k, v in extra.items() if k != name})
             except BadRequestError:
                 continue
             dropped.add(name)
             return result
+        # Several are rejected: leave them out in order until the request goes through.
+        remaining = dict(extra)
+        for name in names[:-1]:
+            del remaining[name]
+            try:
+                result = await attempt(remaining)
+            except BadRequestError:
+                continue
+            dropped.update(set(extra) - set(remaining))
+            return result
         result = await attempt({})
         dropped.update(extra)
         return result
 
     async def _chat(self, messages: ChatMessages, temperature: float, stream: bool):
-        optional: dict = {"extra_body": self._extra, "reasoning_effort": self._effort}
+        optional: dict = {
+            "extra_body": self._extra,
+            "reasoning_effort": self._effort,
+            "max_tokens": self._max_tokens,
+        }
         if stream:
             optional["stream_options"] = {"include_usage": True}
         return await self._create(
@@ -127,6 +152,7 @@ class OpenAICompatLLM:
             {
                 "reasoning": {"effort": self._effort} if self._effort else None,
                 "temperature": temperature,
+                "max_output_tokens": self._max_tokens,
             },
             input=messages,
             stream=stream,

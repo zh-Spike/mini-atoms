@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Models called via the Responses API: on this gateway grok-* rejects Chat Completions and
     # glm-5.3 leaks its reasoning into `content` there. Others are detected on the first 400.
     llm_responses_models: str = "glm-5.3,grok-4.7"
+    # Output cap per call (thinking + answer). Some models default to 4096, which a model that
+    # drafts the whole app in its reasoning exhausts before writing any code. 0 = provider default.
+    llm_max_tokens: int = 16384
     # Demo mode: replay prebuilt apps instead of calling a model. Also on when no API key is set.
     llm_mock: bool = False
 
