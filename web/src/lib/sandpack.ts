@@ -6,10 +6,10 @@ import type { Files } from './api'
 export const RESERVED = new Set(['/index.js', '/public/index.html', '/package.json'])
 
 /** Served by this app, so previews do not depend on cdn.tailwindcss.com (unreachable in some regions). */
-const SELF_HOSTED_TAILWIND = new URL(tailwindBrowserUrl, window.location.origin).href
+export const SELF_HOSTED_TAILWIND = new URL(tailwindBrowserUrl, window.location.origin).href
 export const CDN_TAILWIND = 'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3'
 
-const DARK_VARIANT = '@custom-variant dark (&:where(.dark, .dark *));'
+export const DARK_VARIANT = '@custom-variant dark (&:where(.dark, .dark *));'
 
 /** HTML for exported projects; CRA honours it. Sandpack ignores this file's <head>. */
 export function indexHtml(tailwindSrc: string): string {

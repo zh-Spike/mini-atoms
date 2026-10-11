@@ -3,6 +3,7 @@ import {
   Code2,
   Download,
   Eye,
+  FileCode2,
   History,
   MessageSquare,
   Monitor,
@@ -38,6 +39,7 @@ import {
   type VersionMeta,
 } from '../lib/api'
 import { laneName, PIPELINE } from '../lib/agents'
+import { downloadProjectHtml } from '../lib/exportHtml'
 import { downloadProjectZip } from '../lib/exportZip'
 import { useAuth } from '../lib/useAuth'
 import { formatTime, SOURCE_LABEL } from '../lib/format'
@@ -91,6 +93,18 @@ export default function Workbench() {
     setNotice(text)
     setTimeout(() => setNotice(''), ms)
   }, [])
+
+  const [exportingHtml, setExportingHtml] = useState(false)
+  async function exportHtml(files: Files) {
+    setExportingHtml(true)
+    try {
+      await downloadProjectHtml(project?.title ?? 'app', files)
+    } catch (err) {
+      flash(`导出失败：${err instanceof Error ? err.message : String(err)}`, 4000)
+    } finally {
+      setExportingHtml(false)
+    }
+  }
 
   const { run, start, stop } = useAgentRun(projectId, {
     onMessage: (m) => setMessages((ms) => [...ms.filter((x) => x.id !== m.id), m]),
@@ -385,6 +399,16 @@ export default function Workbench() {
                   className="flex items-center gap-1 rounded-md px-2 py-1 text-xs whitespace-nowrap text-zinc-600 hover:bg-zinc-100"
                 >
                   <Download className="size-3.5" /> 导出
+                </button>
+              )}
+              {display && !running && (
+                <button
+                  onClick={() => void exportHtml(display.files)}
+                  disabled={exportingHtml}
+                  title="导出为单个 HTML 文件，双击即可在浏览器中打开使用（依赖从 esm.sh 加载，需要联网）"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs whitespace-nowrap text-zinc-600 hover:bg-zinc-100 disabled:opacity-50"
+                >
+                  <FileCode2 className="size-3.5" /> {exportingHtml ? '导出中…' : 'HTML'}
                 </button>
               )}
               {versions.length > 0 && (

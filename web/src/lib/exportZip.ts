@@ -1,6 +1,7 @@
 import { strToU8, zipSync } from 'fflate'
 import { dependenciesFor } from './agents'
 import type { Files } from './api'
+import { slugify, triggerDownload } from './download'
 import { CDN_TAILWIND, indexHtml, RESERVED } from './sandpack'
 
 const ENTRY = `import React, { StrictMode } from "react";
@@ -19,7 +20,6 @@ root.render(
 
 /** Packs a version as a Create React App project mirroring the Sandpack runtime. */
 export function downloadProjectZip(title: string, files: Files) {
-  const slug = title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'app'
   const pkg = {
     name: 'mini-atoms-app',
     private: true,
@@ -43,11 +43,5 @@ export function downloadProjectZip(title: string, files: Files) {
   for (const [path, code] of Object.entries(files)) {
     if (!RESERVED.has(path)) entries[`src${path}`] = strToU8(code)
   }
-  const blob = new Blob([zipSync(entries)], { type: 'application/zip' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${slug}.zip`
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  triggerDownload(new Blob([zipSync(entries)], { type: 'application/zip' }), `${slugify(title)}.zip`)
 }
