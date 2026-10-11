@@ -2,11 +2,14 @@
 
 用一次完整的线上操作，展示 mini-atoms 从一句话到可分享应用的全过程。截图和数据都来自线上环境（2026-10-11，真实模型）。想自己动手，按 README 里的「评审快速体验」操作即可。
 
+也可以直接看 [演示视频](https://github.com/zh-Spike/mini-atoms/releases/download/demo-2026-10-11/mini-atoms-demo.mp4)（2 分 17 秒）：Race 生成「习惯打卡」、对比两个方案并采用、一句话加深色模式切换、发布，最后用访客身份打开分享链接。
+
 ## 已发布的示例作品（免登录）
 
 | 作品 | 链接 | 怎么来的 |
 | --- | --- | --- |
 | 番茄钟 | <https://43-161-240-115.sslip.io/s/di8saYac> | Race（deepseek-flash 对 glm-5.3），采用方案 A，再用一句话迭代成蓝色主题 |
+| 习惯打卡 | <https://43-161-240-115.sslip.io/s/9_oQDh5p> | 演示视频中生成：Race（deepseek-flash 对 glm-5.3-flashx）38 秒，采用后加深色模式切换 |
 | 看板 | <https://43-161-240-115.sslip.io/s/7YEOxY_5> | 一句话生成，21 秒，静态检查一次通过 |
 | 记账本 | <https://43-161-240-115.sslip.io/s/RGa9mbuC> | 一句话生成，29 秒，静态检查一次通过 |
 

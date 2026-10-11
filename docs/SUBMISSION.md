@@ -5,8 +5,9 @@
 | 在线地址 | <https://43-161-240-115.sslip.io>（服务状态：<https://43-161-240-115.sslip.io/status>） |
 | 代码仓库 | <https://github.com/zh-Spike/mini-atoms> |
 | 评审邀请码 | 见回收文档（注册时填写，用于控制模型成本） |
+| 演示视频 | [mini-atoms-demo.mp4](https://github.com/zh-Spike/mini-atoms/releases/download/demo-2026-10-11/mini-atoms-demo.mp4)（2 分 17 秒，线上真实录屏：Race、对比采用、迭代、发布、访客打开分享链接） |
 | 图文走查 | [WALKTHROUGH.md](WALKTHROUGH.md)（一次完整线上操作的截图与数据） |
-| 示例作品 | [番茄钟](https://43-161-240-115.sslip.io/s/di8saYac) · [看板](https://43-161-240-115.sslip.io/s/7YEOxY_5) · [记账本](https://43-161-240-115.sslip.io/s/RGa9mbuC)（免登录） |
+| 示例作品 | [番茄钟](https://43-161-240-115.sslip.io/s/di8saYac) · [习惯打卡](https://43-161-240-115.sslip.io/s/9_oQDh5p) · [看板](https://43-161-240-115.sslip.io/s/7YEOxY_5) · [记账本](https://43-161-240-115.sslip.io/s/RGa9mbuC)（免登录） |
 | 使用指南 | [USAGE.md](USAGE.md)（含线上截图） |
 
 ## 做了什么
