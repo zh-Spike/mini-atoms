@@ -1,5 +1,6 @@
 """Public service status: no user data, safe to open without logging in."""
 
+import asyncio
 import time
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
@@ -9,8 +10,8 @@ from openai import AsyncOpenAI
 from sqlalchemy import text
 
 from app import metrics
-from app.auth import DbSession
 from app.config import get_settings
+from app.db import SessionLocal
 
 router = APIRouter(prefix="/api", tags=["status"])
 
@@ -50,13 +51,22 @@ async def _cached_probe() -> dict:
     return _probe_cache["result"]
 
 
-def _check_db(db) -> dict:
-    started = time.monotonic()
-    try:
-        db.execute(text("SELECT 1"))
-    except Exception as exc:
-        return {"status": "down", "latency_ms": None, "detail": type(exc).__name__}
-    return {"status": "up", "latency_ms": int((time.monotonic() - started) * 1000), "detail": ""}
+def _db_report() -> tuple[dict, list, list]:
+    """Database health plus the last 24h of runs and per-model stats; blocking, run in a thread."""
+    with SessionLocal() as db:
+        started = time.monotonic()
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception as exc:
+            return {"status": "down", "latency_ms": None, "detail": type(exc).__name__}, [], []
+        latency = int((time.monotonic() - started) * 1000)
+        start = datetime.now(UTC) - timedelta(hours=24)
+        runs = metrics.runs_since(db, start)
+        models = [
+            {k: m[k] for k in ("model", "calls", "errors", "success_rate", "avg_ttft_ms")}
+            for m in metrics.by_model(metrics.calls_since(db, start))
+        ]
+    return {"status": "up", "latency_ms": latency, "detail": ""}, runs, models
 
 
 def _hourly(runs) -> list[dict]:
@@ -71,18 +81,10 @@ def _hourly(runs) -> list[dict]:
 
 
 @router.get("/status")
-async def status(db: DbSession) -> dict:
-    database = _check_db(db)
-    gateway = await _cached_probe()
-
-    runs, models = [], []
-    if database["status"] == "up":
-        start = datetime.now(UTC) - timedelta(hours=24)
-        runs = metrics.runs_since(db, start)
-        models = [
-            {k: m[k] for k in ("model", "calls", "errors", "success_rate", "avg_ttft_ms")}
-            for m in metrics.by_model(metrics.calls_since(db, start))
-        ]
+async def status() -> dict:
+    (database, runs, models), gateway = await asyncio.gather(
+        asyncio.to_thread(_db_report), _cached_probe()
+    )
     totals = metrics.run_totals(runs)
 
     if database["status"] != "up":

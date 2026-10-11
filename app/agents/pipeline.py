@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import time
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -17,7 +18,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.agents import prompts
+from app.agents import prompts, tracing
 from app.agents.llm import LLM, ChatMessages, RaceLane
 from app.agents.parser import (
     DELETE_RE,
@@ -350,25 +351,29 @@ def _charge_extra_generations(db: Session, project: Project, extra: int) -> bool
 
 
 def _start_run(project: Project) -> str:
-    with SessionLocal() as db:
-        run = Run(project_id=project.id, user_id=project.user_id)
-        db.add(run)
-        db.commit()
-        return run.id
+    run = Run(
+        id=uuid.uuid4().hex,
+        project_id=project.id,
+        user_id=project.user_id,
+        created_at=datetime.now(UTC),
+    )
+    tracing.write_later(lambda: tracing.store(run))
+    return run.id
 
 
 def _finish_run(run_id: str, **fields) -> None:
-    try:
+    fields["finished_at"] = datetime.now(UTC)
+
+    def update() -> None:
         with SessionLocal() as db:
             run = db.get(Run, run_id)
             if run is None:
                 return
             for k, v in fields.items():
                 setattr(run, k, v)
-            run.finished_at = datetime.now(UTC)
             db.commit()
-    except Exception:  # bookkeeping must never mask the pipeline's own outcome
-        log.exception("failed to finish run %s", run_id)
+
+    tracing.write_later(update)
 
 
 async def run_pipeline(

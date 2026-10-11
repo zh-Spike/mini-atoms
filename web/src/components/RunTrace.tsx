@@ -7,6 +7,9 @@ import { formatMs, formatTime, formatTokens, RUN_MODE_LABEL } from '../lib/forma
 import AgentAvatar from './AgentAvatar'
 import { RunStatusBadge } from './Stats'
 
+const POLL_MS = 1500
+const POLL_ATTEMPTS = 10
+
 function stepLabel(c: LLMCallTrace): string {
   const parts: string[] = []
   if (c.lane !== null) parts.push(laneName(c.lane))
@@ -31,12 +34,27 @@ export default function RunTraceDrawer({
 
   useEffect(() => {
     let cancelled = false
-    ;(admin ? api.adminRun(runId) : api.getRun(runId)).then(
-      (r) => !cancelled && setRun(r),
-      (err) => !cancelled && setError(err instanceof ApiError ? err.message : '加载失败'),
-    )
+    let timer = 0
+    // Trace rows are written in the background, so a just-finished run may still read as running.
+    const load = (attempt: number) =>
+      (admin ? api.adminRun(runId) : api.getRun(runId)).then(
+        (r) => {
+          if (cancelled) return
+          setRun(r)
+          if (r.status === 'running' && attempt < POLL_ATTEMPTS)
+            timer = window.setTimeout(() => void load(attempt + 1), POLL_MS)
+        },
+        (err) => {
+          if (cancelled) return
+          if (err instanceof ApiError && err.status === 404 && attempt < POLL_ATTEMPTS)
+            timer = window.setTimeout(() => void load(attempt + 1), POLL_MS)
+          else setError(err instanceof ApiError ? err.message : '加载失败')
+        },
+      )
+    void load(0)
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
   }, [runId, admin])
 
