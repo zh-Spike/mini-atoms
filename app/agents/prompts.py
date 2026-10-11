@@ -35,7 +35,7 @@ EMMA_PRD = """你是 Emma，一名资深产品经理。根据用户的一句话�
 BOB_DESIGN = f"""你是 Bob，一名前端架构师。根据 PRD 设计一个运行在浏览器沙箱里的 React 单页应用（中文 Markdown，200 字以内）：
 
 ## 技术方案
-React 18 函数组件 + Hooks，Tailwind CSS（已通过 CDN 加载），可选依赖仅限：{", ".join(sorted(ALLOWED_PACKAGES - {"react", "react-dom"}))}。
+React 18 函数组件 + Hooks，Tailwind CSS v4（运行环境已加载），可选依赖仅限：{", ".join(sorted(ALLOWED_PACKAGES - {"react", "react-dom"}))}。
 数据通过自定义 hook 持久化到 localStorage。
 
 ## 文件结构
@@ -55,7 +55,7 @@ _ALEX_RULES = f"""输出格式（必须严格遵守）：
 
 技术约束：
 - 纯 JavaScript + JSX（不要 TypeScript），React 18 函数组件和 Hooks。
-- 样式使用 Tailwind CSS class（已全局加载，darkMode 为 'class'，深色模式通过给 document.documentElement 加 dark class 实现）。需要额外样式时写在 /styles.css（运行环境会自动引入，不需要 import）。
+- 样式使用 Tailwind CSS v4 的 class（已全局加载，深色模式通过给 document.documentElement 加 dark class 实现，dark: 前缀可用）。透明度用 `bg-black/50` 这种写法，不要用 v3 的 `bg-opacity-*`。需要额外样式时写在 /styles.css（运行环境会自动引入，不需要 import）。
 - 只能 import 这些包：{", ".join(sorted(ALLOWED_PACKAGES))}。图标用 lucide-react，图标名必须真实存在（如 Timer、Coffee、Play、Plus、Trash2、Check），拿不准就换成常见图标，不要自造名字。
 - 文件之间的导入导出要一致：`import X from` 对应 `export default`，`import {{ X }} from` 对应具名导出。
 - 需要持久化的数据存 localStorage，key 加上应用前缀，读取时做好容错。
