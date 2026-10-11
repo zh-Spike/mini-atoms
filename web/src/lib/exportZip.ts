@@ -1,7 +1,7 @@
 import { strToU8, zipSync } from 'fflate'
 import { dependenciesFor } from './agents'
 import type { Files } from './api'
-import { INDEX_HTML, RESERVED } from './sandpack'
+import { CDN_TAILWIND, indexHtml, RESERVED } from './sandpack'
 
 const ENTRY = `import React, { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -35,7 +35,7 @@ export function downloadProjectZip(title: string, files: Files) {
   }
   const entries: Record<string, Uint8Array> = {
     'package.json': strToU8(JSON.stringify(pkg, null, 2) + '\n'),
-    'public/index.html': strToU8(INDEX_HTML),
+    'public/index.html': strToU8(indexHtml(CDN_TAILWIND)),
     'src/index.js': strToU8(ENTRY),
     'README.md': strToU8(`# ${title}\n\n由 mini-atoms 生成。\n\n\`\`\`bash\nnpm install\nnpm start\n\`\`\`\n`),
   }
