@@ -4,11 +4,19 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.db
+*.sqlite
 *.sqlite3
 .env
 .env*.local
 .DS_Store
 *.log
-.neon
 node_modules/
 app/static/
+
+# Local Neon tooling (CLI link, config, agent skills); not used by the app
+.neon
+neon.ts
+/package.json
+/package-lock.json
+skills-lock.json
+.agents/
