@@ -3,6 +3,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agents import tracing
 from app.api import status as status_api
 from app.config import get_settings
 from app.db import SessionLocal
@@ -23,11 +24,13 @@ def _send(client: TestClient, pid: str, content: str = "做一个待办清单", 
 
 
 def _calls(run_id: str) -> list[LLMCall]:
+    tracing.flush()
     with SessionLocal() as db:
         return db.query(LLMCall).filter(LLMCall.run_id == run_id).order_by(LLMCall.started_at).all()
 
 
 def _run(run_id: str) -> Run:
+    tracing.flush()
     with SessionLocal() as db:
         run = db.get(Run, run_id)
         assert run is not None
@@ -111,10 +114,24 @@ def test_llm_failure_marks_run_and_call_as_error(authed: TestClient, fake_llm) -
     assert run.status == "error" and "gateway exploded" in (run.error or "")
 
 
+def test_trace_write_failure_does_not_break_generation(
+    authed: TestClient, fake_llm, monkeypatch
+) -> None:
+    def broken_store(row) -> None:
+        raise RuntimeError("database unreachable")
+
+    monkeypatch.setattr(tracing, "store", broken_store)
+    events = _send(authed, _project(authed))
+    tracing.flush()
+    assert any(e["type"] == "version" for e in events)
+    assert events[-1]["type"] == "done"
+
+
 def test_usage_and_run_detail_are_private(client: TestClient, usage_llm) -> None:
     client.cookies.clear()
     register(client)
     run_id = _send(client, _project(client))[0]["run_id"]
+    tracing.flush()
 
     usage = client.get("/api/me/usage?days=30").json()
     assert usage["days"] == 30 and len(usage["daily"]) == 30
@@ -140,6 +157,7 @@ def test_admin_requires_admin(authed: TestClient) -> None:
 
 def test_admin_overview_runs_and_trace(authed: TestClient, usage_llm, as_admin) -> None:
     run_id = _send(authed, _project(authed))[0]["run_id"]
+    tracing.flush()
     as_admin(authed)
     assert authed.get("/api/auth/me").json()["is_admin"] is True
 

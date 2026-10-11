@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.agents import tracing
 from app.api import admin, auth, projects, share, status, usage
 from app.auth import sync_invite_codes
 from app.config import get_settings
@@ -21,6 +22,7 @@ async def lifespan(_: FastAPI):
     with SessionLocal() as db:
         sync_invite_codes(db)
     yield
+    tracing.flush()
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)

@@ -1,14 +1,18 @@
 """Per-call LLM tracing: every model call in a run becomes one `llm_calls` row.
 
 `TracedLLM` wraps any `LLM` (the real client or a test fake) and records the prompt, reasoning,
-output, token usage, time to first token and outcome. Rows are written with their own session so
-parallel race lanes never share the pipeline's session.
+output, token usage, time to first token and outcome.
+
+Writes go through one background thread, in submission order: the database can be a few hundred
+milliseconds away, and a synchronous insert between two agents would both delay the next agent and
+block the event loop for every other request.
 """
 
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -19,6 +23,31 @@ from app.models import LLMCall
 log = logging.getLogger(__name__)
 
 MAX_TEXT = 100_000
+
+_writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="trace-writer")
+
+
+def write_later(fn: Callable[[], None]) -> None:
+    """Run a bookkeeping write on the trace writer thread; failures are logged, never raised."""
+
+    def run() -> None:
+        try:
+            fn()
+        except Exception:
+            log.exception("trace write failed")
+
+    _writer.submit(run)
+
+
+def flush(timeout: float = 30) -> None:
+    """Wait until every write submitted so far has finished."""
+    _writer.submit(lambda: None).result(timeout)
+
+
+def store(row) -> None:
+    with SessionLocal() as db:
+        db.add(row)
+        db.commit()
 
 
 def _clip(text: str) -> str:
@@ -79,12 +108,7 @@ class Tracer:
                 call.status,
             )
         )
-        try:
-            with SessionLocal() as db:
-                db.add(call)
-                db.commit()
-        except Exception:  # tracing must never break a generation
-            log.exception("failed to store llm call for run %s", self.run_id)
+        write_later(lambda: store(call))
 
 
 class TracedLLM:
