@@ -48,7 +48,7 @@ export default function SharePage() {
         <SandpackPreview
           className="h-full"
           showOpenInCodeSandbox={false}
-          showRefreshButton={false}
+          showRefreshButton
           style={{ height: '100%' }}
         />
       </SandpackProvider>

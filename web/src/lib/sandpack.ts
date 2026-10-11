@@ -65,7 +65,9 @@ export function toSandpack(files: Files): SandpackSetup {
   if (out['/App.js']) out['/App.js'].active = true
   return {
     files: out,
-    dependencies: dependenciesFor(files),
+    // Declared explicitly: the bundler intermittently fails to supply its Babel helpers on a cold
+    // compile ("Could not find module '@babel/runtime/helpers/interopRequireDefault'").
+    dependencies: { '@babel/runtime': '^7.29.10', ...dependenciesFor(files) },
     externalResources: [SELF_HOSTED_TAILWIND],
   }
 }
