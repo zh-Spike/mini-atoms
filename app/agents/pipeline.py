@@ -26,8 +26,10 @@ from app.agents.parser import (
     strip_code_blocks,
 )
 from app.agents.qa import check_project
+from app.agents.tracing import TracedLLM, Tracer
 from app.config import get_settings
-from app.models import Message, Project, User, Version
+from app.db import SessionLocal
+from app.models import Message, Project, Run, User, Version
 from app.serializers import message_out, version_out
 
 log = logging.getLogger(__name__)
@@ -116,7 +118,7 @@ class _CodeAgent:
     with a correction if no file could be recovered at all.
     """
 
-    def __init__(self, llm: LLM, messages: ChatMessages) -> None:
+    def __init__(self, llm: TracedLLM, messages: ChatMessages) -> None:
         self.llm = llm
         self.messages = [*messages[:-1], _with_reminder(messages[-1])]
         self.parser = FileStreamParser()
@@ -137,11 +139,13 @@ class _CodeAgent:
                 {"role": "user", "content": prompts.FORMAT_RETRY},
             ]
             self.parser = FileStreamParser()
-            async for e in self._attempt(retry):
+            async for e in self._attempt(retry, self.llm.at(f"{self.llm.step}-retry")):
                 yield e
 
-    async def _attempt(self, messages: ChatMessages) -> AsyncIterator[Event]:
-        async for kind, chunk in self.llm.stream(messages):
+    async def _attempt(
+        self, messages: ChatMessages, llm: TracedLLM | None = None
+    ) -> AsyncIterator[Event]:
+        async for kind, chunk in (llm or self.llm).stream(messages):
             if kind == "think":
                 yield _ev("thinking", agent="alex", text=chunk)
                 continue
@@ -205,7 +209,7 @@ class _BuildResult:
 async def _code_and_check(
     db: Session,
     project: Project,
-    llm: LLM,
+    llm: TracedLLM,
     alex_messages: ChatMessages,
     base_files: dict[str, str],
     result: _BuildResult,
@@ -241,7 +245,7 @@ async def _code_and_check(
         yield end("qa", report, ok=False, issues=issues)
 
         fixer = _CodeAgent(
-            llm,
+            llm.at(f"{llm.step}-fix"),
             [
                 {"role": "system", "content": prompts.ALEX_FIX},
                 {
@@ -274,18 +278,23 @@ def _lane_name(i: int) -> str:
 
 
 async def _race(
-    db: Session, project: Project, lanes: list[RaceLane], alex_messages: ChatMessages
+    db: Session,
+    project: Project,
+    lanes: list[RaceLane],
+    alex_messages: ChatMessages,
+    tracer: Tracer,
+    results: list[_BuildResult],
 ) -> AsyncIterator[Event]:
     yield _ev("race_start", lanes=[lane.label for lane in lanes])
     queue: asyncio.Queue[Event | None] = asyncio.Queue()
-    results = [_BuildResult() for _ in lanes]
 
     async def pump(i: int, lane: RaceLane) -> None:
         last = alex_messages[-1]
         messages = [*alex_messages[:-1], {**last, "content": last["content"] + lane.style}]
+        llm = tracer.wrap(lane.llm, "alex", lane=i)
         try:
             async for e in _code_and_check(
-                db, project, lane.llm, messages, {}, results[i], persist=False
+                db, project, llm, messages, {}, results[i], persist=False
             ):
                 await queue.put({**e, "lane": i})
             await queue.put(_ev("lane_finished", lane=i, ok=not results[i].issues))
@@ -340,6 +349,28 @@ def _charge_extra_generations(db: Session, project: Project, extra: int) -> bool
     return True
 
 
+def _start_run(project: Project) -> str:
+    with SessionLocal() as db:
+        run = Run(project_id=project.id, user_id=project.user_id)
+        db.add(run)
+        db.commit()
+        return run.id
+
+
+def _finish_run(run_id: str, **fields) -> None:
+    try:
+        with SessionLocal() as db:
+            run = db.get(Run, run_id)
+            if run is None:
+                return
+            for k, v in fields.items():
+                setattr(run, k, v)
+            run.finished_at = datetime.now(UTC)
+            db.commit()
+    except Exception:  # bookkeeping must never mask the pipeline's own outcome
+        log.exception("failed to finish run %s", run_id)
+
+
 async def run_pipeline(
     db: Session,
     project: Project,
@@ -348,14 +379,23 @@ async def run_pipeline(
     race_lanes: list[RaceLane] | None = None,
 ) -> AsyncIterator[Event]:
     started = time.monotonic()
-    used_llms: list[object] = [llm]
+    tracer = Tracer(_start_run(project))
+    outcome: dict = {"status": "aborted", "mode": "build", "race_lanes": 0}
 
     def done() -> Event:
-        tokens = sum(getattr(m, "tokens", 0) for m in used_llms)
-        duration_ms = int((time.monotonic() - started) * 1000)
-        return _ev("done", stats={"duration_ms": duration_ms, "tokens": tokens})
+        outcome["status"] = "ok"
+        return _ev(
+            "done",
+            run_id=tracer.run_id,
+            stats={
+                "duration_ms": int((time.monotonic() - started) * 1000),
+                "tokens": tracer.prompt_tokens + tracer.completion_tokens,
+                "by_agent": tracer.by_agent(),
+            },
+        )
 
     user_msg = _save_message(db, project, "user", user_text)
+    yield _ev("run_start", run_id=tracer.run_id)
     yield _ev("user_message", message=message_out(user_msg))
 
     try:
@@ -365,7 +405,7 @@ async def run_pipeline(
 
         if current is not None:
             yield _ev("agent_start", agent="mike")
-            raw = await llm.complete(
+            raw = await tracer.wrap(llm, "mike").complete(
                 [
                     {"role": "system", "content": prompts.MIKE_ROUTER},
                     {
@@ -379,6 +419,7 @@ async def run_pipeline(
             yield _ev("delta", agent="mike", text=reply)
             msg = _save_message(db, project, "agent", reply, agent="mike")
             yield _ev("agent_end", agent="mike", message=message_out(msg))
+        outcome["mode"] = mode
 
         race = bool(race_lanes) and len(race_lanes) > 1 and mode in ("build", "rebuild")
         if race:
@@ -391,7 +432,7 @@ async def run_pipeline(
         if mode in ("build", "rebuild"):
             base_files = {}
             emma = _TextAgent(
-                llm,
+                tracer.wrap(llm, "emma"),
                 "emma",
                 [
                     {"role": "system", "content": prompts.EMMA_PRD},
@@ -404,7 +445,7 @@ async def run_pipeline(
             yield _ev("agent_end", agent="emma", message=message_out(msg))
 
             bob = _TextAgent(
-                llm,
+                tracer.wrap(llm, "bob"),
                 "bob",
                 [
                     {"role": "system", "content": prompts.BOB_DESIGN},
@@ -438,16 +479,25 @@ async def run_pipeline(
 
         if race:
             assert race_lanes is not None
-            used_llms.extend(lane.llm for lane in race_lanes)
-            async for e in _race(db, project, race_lanes, alex_messages):
-                yield e
+            outcome["race_lanes"] = len(race_lanes)
+            results = [_BuildResult() for _ in race_lanes]
+            try:
+                async for e in _race(db, project, race_lanes, alex_messages, tracer, results):
+                    yield e
+            finally:
+                issues = [f"{_lane_name(i)}：{x}" for i, r in enumerate(results) for x in r.issues]
+                outcome.update(qa_ok=not issues, qa_issues=issues)
             yield done()
             return
 
         result = _BuildResult()
-        async for e in _code_and_check(db, project, llm, alex_messages, base_files, result):
+        async for e in _code_and_check(
+            db, project, tracer.wrap(llm, "alex"), alex_messages, base_files, result
+        ):
             yield e
+        outcome.update(qa_ok=not result.issues, qa_issues=result.issues)
         if not result.changed:
+            outcome["qa_ok"] = None
             yield done()
             return
 
@@ -455,10 +505,20 @@ async def run_pipeline(
         assert result.alex_msg is not None
         result.alex_msg.version_id = version.id
         db.commit()
+        outcome["version_id"] = version.id
         yield _ev("version", version=version_out(version), message_id=result.alex_msg.id)
         yield done()
     except Exception as exc:  # surface any failure to the client instead of a broken stream
         log.exception("pipeline failed for project %s", project.id)
+        outcome.update(status="error", error=str(exc)[:2000])
         db.rollback()
         msg = _save_message(db, project, "system", f"运行出错：{exc}")
         yield _ev("error", message=str(exc), saved=message_out(msg))
+    finally:
+        _finish_run(
+            tracer.run_id,
+            **outcome,
+            prompt_tokens=tracer.prompt_tokens,
+            completion_tokens=tracer.completion_tokens,
+            duration_ms=int((time.monotonic() - started) * 1000),
+        )

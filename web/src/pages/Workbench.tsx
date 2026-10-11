@@ -19,7 +19,9 @@ import LiveCode from '../components/LiveCode'
 import Logo from '../components/Logo'
 import PipelineBar from '../components/PipelineBar'
 import PreviewPanel, { type Device } from '../components/PreviewPanel'
+import QuotaBadge from '../components/QuotaBadge'
 import { RaceLive, RacePicker, type RaceCandidate } from '../components/RaceBoard'
+import RunTraceDrawer from '../components/RunTrace'
 import ShareButton from '../components/ShareButton'
 import { useAgentRun } from '../hooks/useAgentRun'
 import {
@@ -65,6 +67,8 @@ export default function Workbench() {
   const [notice, setNotice] = useState('')
   const [share, setShare] = useState<ShareInfo | null>(null)
   const [stats, setStats] = useState<RunStats | null>(null)
+  const [lastRunId, setLastRunId] = useState<string | null>(null)
+  const [traceId, setTraceId] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<RaceCandidate[] | null>(null)
   const [pick, setPick] = useState(0)
   const hadVersionAtStart = useRef(false)
@@ -114,8 +118,9 @@ export default function Workbench() {
           created_at: new Date().toISOString(),
         },
       ]),
-    onFinish: (s) => {
+    onFinish: (s, runId) => {
       setStats(s)
+      setLastRunId(runId)
       void refreshMe()
     },
   })
@@ -270,9 +275,7 @@ export default function Workbench() {
               <Eye className="size-3.5" /> 应用
             </TabButton>
           </div>
-          <span className="hidden text-xs text-zinc-500 sm:inline">
-            剩余生成次数 {me ? me.generation_limit - me.generations_used : '-'}
-          </span>
+          <QuotaBadge me={me} className="hidden sm:flex" />
           <ShareButton
             projectId={projectId}
             share={share}
@@ -300,6 +303,7 @@ export default function Workbench() {
             running={running}
             versionNumbers={versionNumbers}
             stats={stats}
+            onShowTrace={lastRunId ? () => setTraceId(lastRunId) : undefined}
             onSend={(text, raceModels) => {
               send(text, raceModels)
               if (raceModels) setPane('preview')
@@ -417,6 +421,7 @@ export default function Workbench() {
           <div className="relative min-h-0 flex-1 bg-white">{main}</div>
         </section>
       </div>
+      {traceId && <RunTraceDrawer runId={traceId} onClose={() => setTraceId(null)} />}
     </div>
   )
 }

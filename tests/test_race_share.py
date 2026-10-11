@@ -23,7 +23,8 @@ def test_race_produces_candidates_and_adopt(authed: TestClient, fake_llm) -> Non
     pid = _new_project(authed)
     events = _build(authed, pid, race=True)
 
-    assert events[1]["type"] == "agent_start" and events[1]["agent"] == "emma"
+    assert [e["type"] for e in events[:2]] == ["run_start", "user_message"]
+    assert events[2]["type"] == "agent_start" and events[2]["agent"] == "emma"
     race_start = next(e for e in events if e["type"] == "race_start")
     assert race_start["lanes"] == ["fake · 稳健", "fake · 创意"]
     assert {e["lane"] for e in events if e["type"] == "file_start"} == {0, 1}

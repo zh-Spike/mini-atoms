@@ -2,7 +2,7 @@
 
 一个 [Atoms](https://atoms.dev/) 风格的 AI 应用生成平台 Demo：用一句话描述想要的应用，一支由 AI 智能体组成的软件团队（产品经理、架构师、工程师、测试）协作完成需求梳理、架构设计、编码和检查，生成的 React 应用在浏览器里实时运行，并可以继续用对话迭代、手动改代码、回滚版本。还可以开启 Race 让两个工程师并行写出两版方案对比择优，满意后一键发布成公开链接分享给别人。
 
-**线上体验**：<https://43-161-240-115.sslip.io> · **使用指南（含截图）**：[docs/USAGE.md](docs/USAGE.md)
+**线上体验**：<https://43-161-240-115.sslip.io> · **服务状态**：<https://43-161-240-115.sslip.io/status> · **使用指南（含截图）**：[docs/USAGE.md](docs/USAGE.md)
 
 ## 功能
 
@@ -20,6 +20,7 @@
 | 一键修复 | 预览运行报错时，点击"让 Alex 修复"会把报错信息交给工程师 |
 | 导出项目 | 任意版本可导出为 Create React App 结构的 zip，本地 `npm install && npm start` 即可运行 |
 | 体验细节 | 预览可切换桌面 / 手机尺寸；窄屏下工作台改为"对话 / 应用"页签切换；每轮结束显示耗时和 token 用量 |
+| 可观测性与运营 | 每次模型调用（角色、模型、prompt、思考过程、输出、输入 / 输出 token、首字延迟、耗时、成败）都落库；工作台可查看每轮明细，`/usage` 看自己的额度与用量，管理员在 `/admin` 看全局运营数据和完整 trace，公开的 `/status` 展示服务可用性；已发布应用有访问来源和设备统计 |
 | 数据持久化 | 账号、项目、对话、版本、发布记录全部存入 Postgres（生产用 Neon，本地用 SQLite）；生成的应用自身数据存在 localStorage |
 
 ## 架构
@@ -39,7 +40,7 @@
      Sandpack bundler                       OpenAI 兼容 LLM    Postgres / SQLite
 ```
 
-- 后端 `app/`：FastAPI + SQLAlchemy。`app/agents/` 是智能体核心，包括流式文件解析器 `parser.py`、静态检查 `qa.py`、各角色提示词 `prompts.py` 和编排器 `pipeline.py`。
+- 后端 `app/`：FastAPI + SQLAlchemy。`app/agents/` 是智能体核心，包括流式文件解析器 `parser.py`、静态检查 `qa.py`、各角色提示词 `prompts.py`、编排器 `pipeline.py` 和调用追踪 `tracing.py`；`app/metrics.py` 负责用量、运营和状态页的聚合。
 - 前端 `web/`：Vite + React + TypeScript + Tailwind。构建产物由 FastAPI 同源托管，所以不需要处理跨域，Cookie 鉴权也最简单。
 
 ## 实现思路与关键取舍
@@ -67,6 +68,27 @@
 11. **Race 只分叉"写代码"这一段。** PRD 和架构对两个方案是共享的，分叉在 Alex 之后，这样对比的是"同一需求的两种实现"，而不是两份不同的需求；也少跑一次 Emma 和 Bob。实现上把"Alex 编码 → QA → 修复一轮"抽成 `_code_and_check`，普通生成和 Race 共用；Race 用 `asyncio.Queue` 合并多路事件流，每个事件带 `lane` 字段，前端按 lane 分别渲染。每路产出一个 `source=race` 的候选版本，"采用"复用已有的回滚接口生成最新版本，不需要新接口。
 12. **Race 的模型选择。** 所有模型走同一个 OpenAI 兼容网关，`LLM_RACE_MODELS` 只是一份白名单（`LLM_MODEL` 总会被加进去），用户在界面上勾选 2-3 个参赛，后端校验必须在白名单内。不同模型对可选参数的支持不一样（例如有的不认 DeepSeek 风格的 `thinking`，有的不认 `stream_options`），所以某个模型返回 400 时，会按顺序去掉这些可选参数重试，并对这个模型记住，之后不再发送。某一路模型报错只会让那一路失败，其他方案照常产出。不传模型时，用默认模型的两种风格（低温度稳健版 + 高温度、视觉更大胆的创意版）比较。Race 只在新建或推倒重做时生效（小修改没必要比较），每个参赛模型消耗 1 次额度——第 1 次由接口扣，其余由流水线在确定要 Race 时才扣，Mike 判断为"修改"时不会多扣；额度不够时自动退回单方案并提示。
 13. **发布的是快照，不是实时同步。** 分享链接指向某个具体版本，继续修改不会影响已发布的应用，需要手动"更新到最新版本"，和 Atoms / Vercel 的发布语义一致。
+14. **可观测性自建，不接第三方。** 多智能体 + 多模型的产品，最需要回答的是"这一轮慢在哪、花了多少 token、哪个模型最容易失败、服务现在是否可用"。实现分三层，见下方"可观测性与运营"一节。没有接 Langfuse 之类的平台，是为了不增加外部依赖和部署成本；表结构按 trace（`runs`）/ generation（`llm_calls`）组织，和这类平台的概念一致，之后要迁移也只需要在 `TracedLLM` 里多上报一份。
+
+## 可观测性与运营
+
+参考了 Atoms 文档里的 [积分和使用情况](https://help.atoms.dev/zh/articles/12129588-credits-and-usage)（余额常驻、使用历史）、[分析概览](https://help.atoms.dev/zh/articles/12129580-analytics-overview)（已发布站点的访问、来源、设备，7 / 30 天）。
+
+```
+run_pipeline ──tracer.wrap(llm, agent, step, lane)──▶ TracedLLM ──▶ OpenAICompatLLM
+     │                                                    │
+     ▼                                                    ▼
+   runs（每轮：模式、状态、QA、版本、token、耗时）      llm_calls（每次调用：prompt、思考、输出、
+                                                          输入 / 输出 token、首字延迟、耗时、成败）
+```
+
+- **追踪**：`TracedLLM` 包住任意 LLM（测试里的假 LLM 也一样），记录每次调用；格式重试记为 `alex-retry`，QA 修复轮记为 `alex-fix`，Race 每路带 `lane`。客户端中途断开时，这一轮和进行中的调用记为"中断"，不算作失败。追踪写库用独立 session、异常只记日志，不会影响生成本身。单个文本字段超过 10 万字符会截断。
+- **用户层**：工作台每轮结束显示耗时、token 和各角色的 token，点"查看明细"打开时间线抽屉（每次调用的起止时间、首字延迟、输入 / 输出 token，可展开思考过程和输出）。顶栏常驻剩余额度，点进 `/usage` 看 7 / 30 天的运行、成功率、token 趋势、按模型 / 按角色拆分和最近运行。发布弹窗里有近 7 天访问量、来源和设备占比。
+- **管理员层**（`ADMIN_USERNAMES` 指定）：`/admin` 展示用户 / 项目 / 运行量、成功率、耗时 P50 / P95、token；模型健康度（调用数、失败率、平均和 P95 首字延迟）；各角色 token 占比；生成质量（QA 最终通过率、需要修复轮的比例、Race 次数和被采用次数）；活跃用户、额度预警、邀请码使用、热门分享；运行记录可按状态、模型、用户筛选，打开后能看到完整的 system / user prompt。
+- **公开状态页** `/status`：应用、数据库（`SELECT 1` 延迟）、模型网关（`models.list` 探测，缓存 60 秒）三个组件的状态，近 24 小时生成成功率和每小时分布、各模型的调用成功率与首字延迟、版本号和运行时长。数据库不可用为"服务中断"；网关不可用，或近 24 小时成功率低于 80%（至少 5 轮）时为"性能下降"。不返回任何用户数据。`/healthz` 保持轻量，仍用于部署和容器健康检查。
+- **隐私边界**：prompt 原文只有管理员能看；普通用户的明细里只有自己这一轮的思考过程和输出，不含系统提示词。
+
+本地实测一轮"计数器"新建：总耗时 13.6 秒、3419 token，其中 Alex 占约 76%，首字延迟 1.8 到 2.6 秒——这类数据就是之后调提示词、选模型的依据。
 
 ## 完成度
 
@@ -75,7 +97,8 @@
 - 邀请码注册与账号登录、项目管理、多智能体流水线、流式过程展示
 - Sandpack 预览、代码编辑、版本历史、回滚、运行报错一键修复
 - Race 多方案并行与对比采用、发布分享（公开链接 + 浏览量）、导出 zip、桌面 / 手机预览、移动端工作台、耗时与 token 展示
-- 后端 40 个测试，覆盖解析器、QA（含图标名和导入导出一致性）、鉴权、额度、流水线、Race（含多模型选择、协议切换和参数降级）、发布分享、表结构补列（使用假 LLM）
+- 可观测性与运营：模型调用追踪、每轮明细、用户用量页、管理员运营后台、公开状态页、分享访问分析
+- 后端 51 个测试，覆盖解析器、QA（含图标名和导入导出一致性）、鉴权、额度、流水线、Race（含多模型选择、协议切换和参数降级）、发布分享、表结构补列、调用追踪（含修复轮、Race 分路、失败）、用量与运营接口权限、状态页（使用假 LLM）
 - CI（后端、前端、Docker 构建）与合并到 main 后自动部署
 
 未完成 / 已知限制：
@@ -105,7 +128,8 @@
 2. **后台任务化**：生成任务放进队列，前端断线可以续看；同时为多实例部署做准备
 3. **模板广场与 Remix**：在发布分享的基础上公开优秀作品，一键复制到自己的项目再改
 4. **视觉自检**：用无头浏览器截图预览，让 QA 基于截图和运行时日志判断问题；也可以作为 Race 的自动评委
-5. **成本看板**：把每轮的耗时和 token 落库，按用户 / 模型统计
+5. **成本与告警**：在已落库的 token 基础上配置各模型单价，折算成金额并按用户设预算；状态页降级或模型失败率升高时推送告警（企业微信 / 邮件）
+6. **提示词迭代闭环**：基于 `llm_calls` 对比同一角色不同提示词版本的 token、耗时和 QA 通过率
 
 ## 本地开发
 
@@ -135,7 +159,7 @@ cd web && npm run lint && npm run typecheck && npm run build
 ```
 feature 分支 -> PR -> CI（后端检查、前端检查、Docker 构建）-> squash merge 到 main
   -> main 上 CI 通过 -> Deploy：构建并推送 ghcr.io 镜像 -> SSH 到服务器
-  -> docker compose pull && up -d -> 通过 HTTPS 做健康检查（/healthz、SPA 首页、未登录 /api/auth/me 返回 401）
+  -> docker compose pull && up -d -> 通过 HTTPS 做健康检查（/healthz、SPA 首页、未登录 /api/auth/me 返回 401、/api/status 的版本号等于本次部署的 commit）
 ```
 
 - 线上地址：https://43-161-240-115.sslip.io 。[sslip.io](https://sslip.io) 把 IP 形式的子域名解析回这个 IP，从而不用买域名也能申请证书。直接用 IP 的 HTTP 访问仍然可用，作为兜底。
@@ -145,6 +169,8 @@ feature 分支 -> PR -> CI（后端检查、前端检查、Docker 构建）-> sq
 - 运行时配置在 GitHub `production` 环境中管理，每次部署写入服务器的 `/opt/mini-atoms/.env`（权限 600）。任何一项缺失，部署都会在重启服务之前失败。
   - secrets：`DATABASE_URL`、`LLM_API_KEY`、`SECRET_KEY`、`INVITE_CODES`
   - variables：`LLM_BASE_URL`、`LLM_MODEL`、`SITE_ADDRESS`（HTTPS 域名，如 `43-161-240-115.sslip.io`）
+  - 可选 variable：`ADMIN_USERNAMES`（可访问 `/admin` 的用户名，逗号分隔），不配置时没有管理员
+  - 镜像构建时把 commit SHA 作为 `GIT_SHA` 注入，显示在 `/status` 页
   - 可选：`LLM_RACE_MODELS`（Race 可选模型白名单）不在部署流程里，使用代码中的默认值 `glm-5.3-flashx,glm-5.3,grok-4.7`；要修改时把它加到 deploy 工作流
   - 修改方式：在 *Settings → Environments → production* 中更新，然后重新运行 *Deploy*。新增配置项时，还需要加到 deploy 工作流的 *Upload runtime config* 步骤。
 - 服务器防火墙需要放行 TCP 80、443（Caddy 申请证书和提供 HTTPS 都需要）。

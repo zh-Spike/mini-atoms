@@ -1,7 +1,9 @@
 import clsx from 'clsx'
 import { Check, Copy, ExternalLink, Globe, Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { api, ApiError, type ShareInfo } from '../lib/api'
+import { api, ApiError, type ShareInfo, type ShareStats } from '../lib/api'
+import { shortDate } from '../lib/format'
+import { Bars } from './Stats'
 
 interface Props {
   projectId: string
@@ -97,6 +99,7 @@ export default function ShareButton(props: Props) {
                   <ExternalLink className="size-3.5" />
                 </a>
               </div>
+              <ShareAnalytics projectId={projectId} slug={share.slug} />
               <div className="mt-3 flex items-center justify-between gap-2">
                 <button
                   disabled={busy}
@@ -138,6 +141,65 @@ export default function ShareButton(props: Props) {
             </>
           )}
           {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const DEVICE_LABEL = { desktop: '桌面', mobile: '手机' } as const
+
+/** Last-7-day traffic of the published app, like a tiny analytics report. */
+function ShareAnalytics({ projectId, slug }: { projectId: string; slug: string }) {
+  const [stats, setStats] = useState<ShareStats | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api.shareStats(projectId).then(
+      (s) => !cancelled && setStats(s),
+      () => {},
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, slug])
+
+  if (!stats) return null
+  const total = Math.max(1, stats.views_window)
+  return (
+    <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+      <div className="mb-2 flex justify-between text-xs">
+        <span className="text-zinc-500">近 7 天访问</span>
+        <span className="font-medium">{stats.views_window} 次</span>
+      </div>
+      <Bars
+        height={48}
+        data={stats.daily.map((d) => ({
+          label: shortDate(d.date),
+          title: `${d.date}：${d.views} 次`,
+          parts: [{ value: d.views, className: 'bg-emerald-400' }],
+        }))}
+      />
+      {stats.views_window > 0 && (
+        <div className="mt-2 grid grid-cols-2 gap-3 text-[11px] text-zinc-500">
+          <div>
+            <div className="mb-1 text-zinc-400">来源</div>
+            {stats.referrers.map((r) => (
+              <div key={r.host} className="flex justify-between gap-1">
+                <span className="truncate">{r.host}</span>
+                <span>{r.views}</span>
+              </div>
+            ))}
+          </div>
+          <div>
+            <div className="mb-1 text-zinc-400">设备</div>
+            {stats.devices.map((d) => (
+              <div key={d.device} className="flex justify-between">
+                <span>{DEVICE_LABEL[d.device]}</span>
+                <span>{Math.round((d.views / total) * 100)}%</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

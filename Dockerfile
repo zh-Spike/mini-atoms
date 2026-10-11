@@ -25,6 +25,9 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY app ./app
 COPY --from=web /web/dist ./app/static
 
+ARG GIT_SHA=dev
+ENV GIT_SHA=${GIT_SHA}
+
 RUN useradd --create-home --uid 1001 appuser
 USER appuser
 

@@ -6,6 +6,7 @@ from app.auth import (
     CurrentUser,
     DbSession,
     authenticate,
+    is_admin,
     register_user,
     set_session_cookie,
 )
@@ -31,6 +32,7 @@ def _me(user) -> dict:
         "username": user.username,
         "generations_used": user.generations_used,
         "generation_limit": get_settings().user_generation_limit,
+        "is_admin": is_admin(user),
     }
 
 

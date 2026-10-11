@@ -6,6 +6,9 @@ import Projects from './pages/Projects'
 
 const Workbench = lazy(() => import('./pages/Workbench'))
 const SharePage = lazy(() => import('./pages/SharePage'))
+const Usage = lazy(() => import('./pages/Usage'))
+const Admin = lazy(() => import('./pages/Admin'))
+const Status = lazy(() => import('./pages/Status'))
 
 export default function App() {
   return (
@@ -34,6 +37,34 @@ export default function App() {
         element={
           <Suspense fallback={<FullScreenSpinner />}>
             <SharePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/usage"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<FullScreenSpinner />}>
+              <Usage />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<FullScreenSpinner />}>
+              <Admin />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/status"
+        element={
+          <Suspense fallback={<FullScreenSpinner />}>
+            <Status />
           </Suspense>
         }
       />
