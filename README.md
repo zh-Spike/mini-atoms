@@ -74,7 +74,7 @@
 5. **迭代时增量修改。** 小改动只让 Alex 输出变更文件，再和上一版本合并，速度快、token 少，也不容易改坏无关代码。
 6. **版本是不可变快照。** 回滚 = 复制旧版本生成新版本，历史永远不会丢。
 7. **默认关闭 / 压低模型的思考。** 实测 deepseek 系列开启思考时，模型会在思考阶段先把代码草拟一遍，首字延迟达到几十秒；关闭后整体快很多。GLM / Grok 不认 DeepSeek 风格的 `thinking` 参数，改为发送低思考强度（Chat 协议的 `reasoning_effort`、Responses 协议的 `reasoning.effort`）。同一个三模型 Race 实测从 479 秒、12 万 token 降到 56 秒、2 万 token。可以用 `LLM_DISABLE_THINKING=false` 打开完整思考。
-8. **按模型适配协议。** 同一网关下，grok 系列只支持 Responses 协议（Chat Completions 直接返回 `protocol_not_supported`），glm-5.3 在 Chat 协议下会把思考过程混进正文，所以这两类走 Responses 协议（`LLM_RESPONSES_MODELS`），其他模型遇到 `protocol_not_supported` 时自动切换。可选参数被某个模型拒绝（400）时，逐个去掉试探，只丢掉真正被拒绝的那个，并按模型记住。
+8. **按模型适配协议。** 同一网关下，grok 系列只支持 Responses 协议（Chat Completions 直接返回 `protocol_not_supported`），glm-5.3 在 Chat 协议下会把思考过程混进正文，所以这两类走 Responses 协议（`LLM_RESPONSES_MODELS`），其他模型遇到 `protocol_not_supported` 时自动切换。可选参数被某个模型拒绝（400）时，逐个去掉试探，只丢掉真正被拒绝的那个，并按模型记住。追踪数据还暴露过一次静默失败：glm-5.3-flashx 不接受关闭思考，即使低思考强度也会在思考里先把整份代码写一遍，用完网关默认的 4096 输出 token 后正文为空，Race 里这一路就悄悄消失了。现在每次调用显式设置 `LLM_MAX_TOKENS`（默认 16384，被拒绝时同样自动去掉），某一路没有产出代码时明确报错，新建时没有代码则整轮报错。
 9. **邀请码控制注册，账号承载身份。** 邀请码只在注册时校验并扣减次数，注册后所有鉴权、项目归属和额度都基于账号。密码用标准库 scrypt 加盐哈希，不引入额外依赖。
 10. **不引入 Alembic。** 启动时 `create_all` 创建缺失的表；对已有表新增的可空列，用 `app/db.py` 里一个十几行的 `_add_missing_columns()` 检查后补 `ALTER TABLE ADD COLUMN`。发布记录用独立的 `shares` 表，不改旧表。Demo 阶段表结构简单，属于有意的复杂度控制。
 11. **Race 只分叉"写代码"这一段。** PRD 和架构对两个方案是共享的，分叉在 Alex 之后，这样对比的是"同一需求的两种实现"，而不是两份不同的需求；也少跑一次 Emma 和 Bob。实现上把"Alex 编码 → QA → 修复一轮"抽成 `_code_and_check`，普通生成和 Race 共用；Race 用 `asyncio.Queue` 合并多路事件流，每个事件带 `lane` 字段，前端按 lane 分别渲染。每路产出一个 `source=race` 的候选版本，"采用"复用已有的回滚接口生成最新版本，不需要新接口。

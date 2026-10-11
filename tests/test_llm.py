@@ -74,6 +74,16 @@ def test_only_the_rejected_param_is_dropped(monkeypatch) -> None:
     chat = _Endpoint(_chat_reply(), rejected={"reasoning_effort", "extra_body"})
     asyncio.run(_llm("model-s", chat).complete(MSG))
     assert llm_module._dropped["model-s"] == {"reasoning_effort", "extra_body"}
+    assert "max_tokens" in chat.calls[-1]
+
+
+def test_output_cap_is_sent(monkeypatch) -> None:
+    _reset(monkeypatch)
+    chat = _Endpoint(_chat_reply())
+    responses = _Endpoint(SimpleNamespace(usage=None, output_text="r"))
+    asyncio.run(_llm("model-cap", chat).complete(MSG))
+    asyncio.run(_llm("grok-4.7", chat, responses).complete(MSG))
+    assert "max_tokens" in chat.calls[0] and "max_output_tokens" in responses.calls[0]
 
 
 def test_switches_to_responses_on_protocol_error(monkeypatch) -> None:

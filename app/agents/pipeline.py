@@ -37,6 +37,8 @@ log = logging.getLogger(__name__)
 
 Event = dict
 
+NO_CODE = "工程师没有产出代码（模型输出为空或被截断），请重试或换一个模型。"
+
 
 def _ev(type_: str, **kw) -> Event:
     return {"type": type_, **kw}
@@ -309,7 +311,10 @@ async def _race(
                 elif e["text"] not in notices:
                     notices.add(e["text"])
                     await queue.put(e)
-            await queue.put(_ev("lane_finished", lane=i, ok=not results[i].issues))
+            if results[i].changed:
+                await queue.put(_ev("lane_finished", lane=i, ok=not results[i].issues))
+            else:
+                await queue.put(_ev("lane_error", lane=i, message=NO_CODE))
         except Exception as exc:
             log.exception("race lane %s failed for project %s", i, project.id)
             await queue.put(_ev("lane_error", lane=i, message=str(exc)))
@@ -512,6 +517,8 @@ async def run_pipeline(
         ):
             yield e
         outcome.update(qa_ok=not result.issues, qa_issues=result.issues)
+        if not result.changed and mode != "edit":
+            raise RuntimeError(NO_CODE)
         if not result.changed:
             outcome["qa_ok"] = None
             yield done()

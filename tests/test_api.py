@@ -125,6 +125,26 @@ def test_retry_when_no_files(authed: TestClient, fake_llm) -> None:
     assert any(e["type"] == "version" for e in events)
 
 
+def test_build_without_code_is_an_error(authed: TestClient, fake_llm) -> None:
+    pid = authed.post("/api/projects", json={"prompt": "x"}).json()["id"]
+    fake_llm.alex_replies = ["只有思路。", "还是只有思路。"]
+    events = _events(authed.post(f"/api/projects/{pid}/messages", json={"content": "x"}))
+    assert not any(e["type"] == "version" for e in events)
+    error = next(e for e in events if e["type"] == "error")
+    assert "没有产出代码" in error["message"]
+
+
+def test_race_lane_without_code_reports_error(authed: TestClient, fake_llm) -> None:
+    pid = authed.post("/api/projects", json={"prompt": "x"}).json()["id"]
+    fake_llm.alex_replies = ["只有思路。", "还是只有思路。"]
+    body = {"content": "x", "race": True}
+    events = _events(authed.post(f"/api/projects/{pid}/messages", json=body))
+    lane_errors = [e for e in events if e["type"] == "lane_error"]
+    assert len(lane_errors) == 1 and "没有产出代码" in lane_errors[0]["message"]
+    assert len([e for e in events if e["type"] == "lane_done"]) == 1
+    assert events[-1]["type"] == "done"
+
+
 def test_manual_version(authed: TestClient) -> None:
     pid = authed.post("/api/projects", json={"prompt": "x"}).json()["id"]
     v = authed.post(
