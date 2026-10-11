@@ -58,10 +58,25 @@ class OpenAICompatLLM:
         configured = {m.strip() for m in settings.llm_responses_models.split(",") if m.strip()}
         self._configured_responses = self._model in configured
         self.tokens = 0
+        # (prompt, completion) tokens of the most recent call, read by the tracer.
+        self.last_usage = (0, 0)
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    @property
+    def protocol(self) -> str:
+        return "responses" if self._use_responses else "chat"
 
     @property
     def _use_responses(self) -> bool:
         return self._configured_responses or self._model in _responses_detected
+
+    def _record(self, prompt: int | None, completion: int | None, total: int | None) -> None:
+        prompt, completion = prompt or 0, completion or 0
+        self.last_usage = (prompt, completion)
+        self.tokens += total or prompt + completion
 
     async def _create(self, create, optional: dict, **kw):
         """On a 400, find the optional param the model rejects by leaving out one at a time."""
@@ -116,6 +131,7 @@ class OpenAICompatLLM:
         )
 
     async def stream(self, messages: ChatMessages) -> AsyncIterator[tuple[ChunkKind, str]]:
+        self.last_usage = (0, 0)
         if not self._use_responses:
             try:
                 resp = await self._chat(messages, self._temperature, stream=True)
@@ -124,7 +140,8 @@ class OpenAICompatLLM:
             else:
                 async for chunk in resp:
                     if chunk.usage:
-                        self.tokens += chunk.usage.total_tokens or 0
+                        u = chunk.usage
+                        self._record(u.prompt_tokens, u.completion_tokens, u.total_tokens)
                     if not chunk.choices:
                         continue
                     delta = chunk.choices[0].delta
@@ -142,9 +159,11 @@ class OpenAICompatLLM:
             elif ev.type in _REASONING_EVENTS:
                 yield "think", ev.delta
             elif ev.type == "response.completed" and ev.response.usage:
-                self.tokens += ev.response.usage.total_tokens or 0
+                u = ev.response.usage
+                self._record(u.input_tokens, u.output_tokens, u.total_tokens)
 
     async def complete(self, messages: ChatMessages) -> str:
+        self.last_usage = (0, 0)
         if not self._use_responses:
             try:
                 resp = await self._chat(messages, 0.2, stream=False)
@@ -152,12 +171,14 @@ class OpenAICompatLLM:
                 _responses_detected.add(self._model)
             else:
                 if resp.usage:
-                    self.tokens += resp.usage.total_tokens or 0
+                    u = resp.usage
+                    self._record(u.prompt_tokens, u.completion_tokens, u.total_tokens)
                 return resp.choices[0].message.content or ""
 
         resp = await self._responses(messages, 0.2, stream=False)
         if resp.usage:
-            self.tokens += resp.usage.total_tokens or 0
+            u = resp.usage
+            self._record(u.input_tokens, u.output_tokens, u.total_tokens)
         return resp.output_text or ""
 
 

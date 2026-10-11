@@ -1,6 +1,6 @@
 import { ArrowRight, KeyRound } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AgentAvatar from '../components/AgentAvatar'
 import Logo from '../components/Logo'
 import { api, ApiError } from '../lib/api'
@@ -168,6 +168,11 @@ export default function Landing() {
           </p>
         </form>
       </main>
+      <footer className="pb-6 text-center text-xs text-zinc-400">
+        <Link to="/status" className="hover:text-zinc-600">
+          服务状态
+        </Link>
+      </footer>
     </div>
   )
 }

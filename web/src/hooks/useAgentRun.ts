@@ -45,7 +45,7 @@ interface Handlers {
   onLaneDone: (lane: number, label: string, v: Version, m: Message) => void
   onNotice: (text: string) => void
   onError: (text: string) => void
-  onFinish: (stats: RunStats | null) => void
+  onFinish: (stats: RunStats | null, runId: string | null) => void
 }
 
 const emptyRun = (): RunState => ({
@@ -133,6 +133,7 @@ export function useAgentRun(projectId: string, handlers: Handlers) {
       const h = handlersRef.current
       const s = stateRef.current
       let stats: RunStats | null = null
+      let runId: string | null = null
       try {
         for await (const ev of sendMessage(projectId, content, raceModels, ctrl.signal)) {
           if ('lane' in ev && ev.lane !== undefined && s.race) {
@@ -156,6 +157,9 @@ export function useAgentRun(projectId: string, handlers: Handlers) {
             continue
           }
           switch (ev.type) {
+            case 'run_start':
+              runId = ev.run_id
+              break
             case 'user_message':
               h.onMessage(ev.message)
               break
@@ -217,7 +221,7 @@ export function useAgentRun(projectId: string, handlers: Handlers) {
         cancelAnimationFrame(frame.current)
         frame.current = 0
         setState(null)
-        h.onFinish(stats)
+        h.onFinish(stats, runId)
       }
     },
     [projectId, flush],

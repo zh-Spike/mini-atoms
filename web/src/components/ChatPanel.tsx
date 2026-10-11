@@ -1,10 +1,11 @@
 import clsx from 'clsx'
-import { ArrowUp, Check, FileCode2, Loader2, Square, Timer } from 'lucide-react'
+import { Activity, ArrowUp, Check, FileCode2, Loader2, Square, Timer } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import Markdown from 'react-markdown'
 import type { LiveTurn } from '../hooks/useAgentRun'
 import type { Message, RunStats } from '../lib/api'
 import { AGENTS } from '../lib/agents'
+import { formatMs, formatTokens } from '../lib/format'
 import { useModels } from '../lib/models'
 import AgentAvatar from './AgentAvatar'
 import { RaceModelPicker, RaceToggle } from './RaceControl'
@@ -15,13 +16,15 @@ interface Props {
   running: boolean
   versionNumbers: Record<string, number>
   stats: RunStats | null
+  onShowTrace?: () => void
   onSend: (text: string, raceModels: string[] | null) => void
   onStop: () => void
   onOpenVersion: (versionId: string) => void
 }
 
 export default function ChatPanel(props: Props) {
-  const { messages, live, running, versionNumbers, stats, onSend, onStop, onOpenVersion } = props
+  const { messages, live, running, versionNumbers, stats, onShowTrace, onSend, onStop } = props
+  const { onOpenVersion } = props
   const [input, setInput] = useState('')
   const [race, setRace] = useState<string[] | null>(null)
   const models = useModels()
@@ -64,12 +67,7 @@ export default function ChatPanel(props: Props) {
       </div>
 
       <div className="border-t border-zinc-200 p-3">
-        {stats && !running && (
-          <p className="mb-2 flex items-center gap-1 text-[11px] text-zinc-400">
-            <Timer className="size-3" /> 上一轮用时 {(stats.duration_ms / 1000).toFixed(1)} 秒
-            {stats.tokens > 0 && ` · ${stats.tokens.toLocaleString()} tokens`}
-          </p>
-        )}
+        {stats && !running && <RunStatsLine stats={stats} onShowTrace={onShowTrace} />}
         <div className="rounded-xl border border-zinc-300 bg-white p-2 focus-within:border-violet-400">
           {race && models && !running && (
             <RaceModelPicker info={models} value={race} onChange={setRace} />
@@ -105,6 +103,39 @@ export default function ChatPanel(props: Props) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function RunStatsLine({ stats, onShowTrace }: { stats: RunStats; onShowTrace?: () => void }) {
+  const agents = (stats.by_agent ?? []).filter((a) => a.tokens > 0)
+  return (
+    <div className="mb-2 text-[11px] text-zinc-400">
+      <p className="flex items-center gap-1">
+        <Timer className="size-3" /> 上一轮用时 {formatMs(stats.duration_ms)}
+        {stats.tokens > 0 && ` · ${stats.tokens.toLocaleString()} tokens`}
+        {onShowTrace && (
+          <button
+            onClick={onShowTrace}
+            className="ml-auto flex items-center gap-0.5 text-violet-600 hover:text-violet-800"
+          >
+            <Activity className="size-3" /> 查看明细
+          </button>
+        )}
+      </p>
+      {agents.length > 0 && (
+        <p className="mt-1 flex flex-wrap gap-1">
+          {agents.map((a) => (
+            <span
+              key={`${a.agent}-${a.model}`}
+              className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-zinc-500"
+              title={a.model}
+            >
+              {AGENTS[a.agent].name} {formatTokens(a.tokens)}
+            </span>
+          ))}
+        </p>
+      )}
     </div>
   )
 }

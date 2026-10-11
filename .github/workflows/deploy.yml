@@ -60,6 +60,8 @@ jobs:
         with:
           context: .
           push: true
+          build-args: |
+            GIT_SHA=${{ env.IMAGE_TAG }}
           tags: |
             ${{ env.IMAGE }}:${{ env.IMAGE_TAG }}
             ${{ env.IMAGE }}:latest
@@ -89,12 +91,14 @@ jobs:
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
           SITE_ADDRESS: ${{ vars.SITE_ADDRESS }}
+          ADMIN_USERNAMES: ${{ vars.ADMIN_USERNAMES }}
         run: |
           KEYS="DATABASE_URL LLM_API_KEY SECRET_KEY INVITE_CODES LLM_BASE_URL LLM_MODEL SITE_ADDRESS"
+          OPTIONAL="ADMIN_USERNAMES"
           for k in $KEYS; do
             [ -n "${!k}" ] || { echo "::error::Missing production config: $k"; exit 1; }
           done
-          for k in $KEYS; do printf '%s=%s\n' "$k" "${!k}"; done \
+          for k in $KEYS $OPTIONAL; do printf '%s=%s\n' "$k" "${!k}"; done \
             | ssh prod "umask 077 && cat > ${APP_DIR}/.env.new && mv ${APP_DIR}/.env.new ${APP_DIR}/.env"
 
       - name: Deploy to server
@@ -117,12 +121,13 @@ jobs:
           check() {
             curl -fsS --max-time 5 "$BASE/healthz" >/dev/null \
               && curl -fsS --max-time 5 "$BASE/" | grep -q '<div id="root">' \
-              && [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/api/auth/me")" = 401 ]
+              && [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/api/auth/me")" = 401 ] \
+              && curl -fsS --max-time 10 "$BASE/api/status" | grep -q "\"version\":\"${IMAGE_TAG}\""
           }
           # The first deploy waits for Caddy to obtain the TLS certificate.
           for i in $(seq 1 40); do
             if check; then
-              echo "Deployed ${IMAGE_TAG}: API, SPA and auth guard are up"; exit 0
+              echo "Deployed ${IMAGE_TAG}: API, SPA, auth guard and status version are up"; exit 0
             fi
             sleep 3
           done

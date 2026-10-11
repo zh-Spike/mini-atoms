@@ -115,3 +115,17 @@ def current_user(request: Request, db: Annotated[Session, Depends(get_db)]) -> U
 
 CurrentUser = Annotated[User, Depends(current_user)]
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+def is_admin(user: User) -> bool:
+    admins = {u.strip().lower() for u in get_settings().admin_usernames.split(",") if u.strip()}
+    return user.username in admins
+
+
+def require_admin(user: CurrentUser) -> User:
+    if not is_admin(user):
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    return user
+
+
+AdminUser = Annotated[User, Depends(require_admin)]

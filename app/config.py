@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     invite_codes: str = "DEMO:100"
     # AI runs allowed per account.
     user_generation_limit: int = 30
+    # Comma-separated usernames that can open the operations dashboard and full prompt traces.
+    admin_usernames: str = ""
+    # Build commit, shown on the public status page; injected at image build time.
+    git_sha: str = "dev"
+    # Day boundaries for usage and operations charts.
+    stats_timezone: str = "Asia/Shanghai"
 
 
 @lru_cache

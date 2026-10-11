@@ -13,7 +13,7 @@ export default function SharePage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.getShared(slug).then(
+    api.getShared(slug, document.referrer).then(
       (a) => {
         setApp(a)
         document.title = `${a.title} · mini-atoms`

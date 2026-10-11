@@ -94,3 +94,61 @@ class Share(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     version: Mapped[Version] = relationship()
+
+
+class ShareView(Base):
+    __tablename__ = "share_views"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(16), index=True)
+    referrer_host: Mapped[str] = mapped_column(String(255), default="")
+    device: Mapped[str] = mapped_column(String(16), default="desktop")  # desktop | mobile
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class Run(Base):
+    """One user message and everything the agents did for it."""
+
+    __tablename__ = "runs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    user_id: Mapped[str] = mapped_column(String(32), index=True)
+    mode: Mapped[str] = mapped_column(String(16), default="build")  # build | edit | rebuild
+    race_lanes: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="running")  # running|ok|error|aborted
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    qa_ok: Mapped[bool | None] = mapped_column(nullable=True)
+    qa_issues: Mapped[list[str]] = mapped_column(JSON, default=list)
+    version_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    calls: Mapped[list["LLMCall"]] = relationship(
+        cascade="all, delete-orphan", order_by="LLMCall.started_at"
+    )
+
+
+class LLMCall(Base):
+    __tablename__ = "llm_calls"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
+    agent: Mapped[str] = mapped_column(String(16))
+    step: Mapped[str] = mapped_column(String(32))  # e.g. alex | alex-retry | alex-fix
+    lane: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    model: Mapped[str] = mapped_column(String(64), default="")
+    protocol: Mapped[str] = mapped_column(String(16), default="")  # chat | responses
+    messages: Mapped[list[dict[str, str]]] = mapped_column(JSON, default=list)
+    thinking: Mapped[str] = mapped_column(Text, default="")
+    output: Mapped[str] = mapped_column(Text, default="")
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    ttft_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="ok")  # ok | error | aborted
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
