@@ -42,6 +42,7 @@ export default function SharePage() {
         template="react"
         files={sandpack.files}
         customSetup={{ dependencies: sandpack.dependencies }}
+        options={{ externalResources: sandpack.externalResources }}
         className="h-full"
       >
         <SandpackPreview

@@ -38,6 +38,7 @@ export default function PreviewPanel(props: Props) {
       options={{
         recompileMode: 'delayed',
         recompileDelay: 600,
+        externalResources: sandpack.externalResources,
       }}
       className="h-full"
     >
