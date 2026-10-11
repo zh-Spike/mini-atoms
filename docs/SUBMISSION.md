@@ -5,15 +5,15 @@
 | 在线地址 | <https://43-161-240-115.sslip.io>（服务状态：<https://43-161-240-115.sslip.io/status>） |
 | 代码仓库 | <https://github.com/zh-Spike/mini-atoms> |
 | 评审邀请码 | 见回收文档（注册时填写，用于控制模型成本） |
-| 演示视频 | [mini-atoms-demo.mp4](https://github.com/zh-Spike/mini-atoms/releases/download/demo-2026-10-11/mini-atoms-demo.mp4)（2 分 17 秒，线上真实录屏：Race、对比采用、迭代、发布、访客打开分享链接） |
+| 演示视频 | [mini-atoms-demo.mp4](https://github.com/zh-Spike/mini-atoms/releases/download/demo-2026-10-11/mini-atoms-demo.mp4)（2 分 57 秒，线上真实录屏带字幕：Race、对比采用、迭代、发布、导出 HTML、访客打开分享链接） |
 | 图文走查 | [WALKTHROUGH.md](WALKTHROUGH.md)（一次完整线上操作的截图与数据） |
-| 示例作品 | [番茄钟](https://43-161-240-115.sslip.io/s/di8saYac) · [习惯打卡](https://43-161-240-115.sslip.io/s/9_oQDh5p) · [看板](https://43-161-240-115.sslip.io/s/7YEOxY_5) · [记账本](https://43-161-240-115.sslip.io/s/RGa9mbuC)（免登录） |
+| 示例作品 | [单词卡](https://43-161-240-115.sslip.io/s/YfCiV50y) · [番茄钟](https://43-161-240-115.sslip.io/s/di8saYac) · [习惯打卡](https://43-161-240-115.sslip.io/s/9_oQDh5p) · [看板](https://43-161-240-115.sslip.io/s/7YEOxY_5) · [记账本](https://43-161-240-115.sslip.io/s/RGa9mbuC)（免登录） |
 | 使用指南 | [USAGE.md](USAGE.md)（含线上截图） |
 | AI 协作开发说明 | [AI_WORKFLOW.md](AI_WORKFLOW.md)（工具链、分工、时间线、用数据驱动决策的例子） |
 
 ## 评审须知
 
-- **预览首次加载要几秒**：生成的应用在浏览器沙箱里实时编译，第一次打开需要从 codesandbox.io 加载打包服务，之后会快很多。分享页也一样。
+- **预览首次加载要几秒**：生成的应用在浏览器沙箱里实时编译，第一次打开需要从 codesandbox.io 加载打包服务，之后会快很多。分享页也一样。万一预览显示加载错误（打包服务偶发故障），点预览右下角的刷新按钮重试。
 - **Race 耗时取决于最慢的模型**：deepseek-flash 一般 20-40 秒；glm 系列较慢，大一点的应用可能要 1 分钟以上。只想快速看效果可以先不开 Race。
 - **模型不可用时会进入演示模式**：如果模型网关连不上或额度用尽，这一轮会自动回放预置应用（看板、番茄钟、记账本），并在对话区提示，流程照常走完。
 - **生成的应用数据存在访问者自己的浏览器里**：刷新或重开浏览器后仍在，但换一台设备看不到（平台自身的账号、项目和版本存在数据库里，换设备可见）。

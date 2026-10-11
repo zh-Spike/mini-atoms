@@ -2,9 +2,9 @@
 
 一个 [Atoms](https://atoms.dev/) 风格的 AI 应用生成平台 Demo：用一句话描述想要的应用，一支由 AI 智能体组成的软件团队（产品经理、架构师、工程师、测试）协作完成需求梳理、架构设计、编码和检查，生成的 React 应用在浏览器里实时运行，并可以继续用对话迭代、手动改代码、回滚版本。还可以开启 Race 让两个工程师并行写出两版方案对比择优，满意后一键发布成公开链接分享给别人。
 
-**线上体验**：<https://43-161-240-115.sslip.io> · **服务状态**：<https://43-161-240-115.sslip.io/status> · **使用指南（含截图）**：[docs/USAGE.md](docs/USAGE.md) · **提交说明**：[docs/SUBMISSION.md](docs/SUBMISSION.md) · **图文走查**：[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) · **AI 协作开发说明**：[docs/AI_WORKFLOW.md](docs/AI_WORKFLOW.md) · **演示视频（2 分 17 秒）**：[mini-atoms-demo.mp4](https://github.com/zh-Spike/mini-atoms/releases/download/demo-2026-10-11/mini-atoms-demo.mp4)
+**线上体验**：<https://43-161-240-115.sslip.io> · **服务状态**：<https://43-161-240-115.sslip.io/status> · **使用指南（含截图）**：[docs/USAGE.md](docs/USAGE.md) · **提交说明**：[docs/SUBMISSION.md](docs/SUBMISSION.md) · **图文走查**：[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) · **AI 协作开发说明**：[docs/AI_WORKFLOW.md](docs/AI_WORKFLOW.md) · **演示视频（2 分 57 秒）**：[mini-atoms-demo.mp4](https://github.com/zh-Spike/mini-atoms/releases/download/demo-2026-10-11/mini-atoms-demo.mp4)
 
-**示例作品（免登录直接用）**：[番茄钟](https://43-161-240-115.sslip.io/s/di8saYac)（Race 采用 + 对话迭代）· [习惯打卡](https://43-161-240-115.sslip.io/s/9_oQDh5p)（演示视频中生成）· [看板](https://43-161-240-115.sslip.io/s/7YEOxY_5) · [记账本](https://43-161-240-115.sslip.io/s/RGa9mbuC)
+**示例作品（免登录直接用）**：[单词卡](https://43-161-240-115.sslip.io/s/YfCiV50y)（演示视频中生成：Race 采用 + 对话迭代）· [番茄钟](https://43-161-240-115.sslip.io/s/di8saYac) · [习惯打卡](https://43-161-240-115.sslip.io/s/9_oQDh5p) · [看板](https://43-161-240-115.sslip.io/s/7YEOxY_5) · [记账本](https://43-161-240-115.sslip.io/s/RGa9mbuC)
 
 ## 评审快速体验（约 3 分钟）
 
@@ -117,7 +117,7 @@ run_pipeline ──tracer.wrap(llm, agent, step, lane)──▶ TracedLLM ──
 
 - 邀请码注册与账号登录、项目管理、多智能体流水线、流式过程展示
 - Sandpack 预览、代码编辑、版本历史、回滚、运行报错一键修复
-- Race 多方案并行与对比采用、发布分享（公开链接 + 浏览量）、导出 zip、桌面 / 手机预览、移动端工作台、耗时与 token 展示
+- Race 多方案并行与对比采用、发布分享（公开链接 + 浏览量）、导出 zip 与单文件 HTML、桌面 / 手机预览、移动端工作台、耗时与 token 展示
 - 可观测性与运营：模型调用追踪、每轮明细、用户用量页、管理员运营后台、公开状态页、分享访问分析
 - 演示模式：无 Key 时完整可用，网关故障时自动降级
 - 后端 68 个测试，覆盖解析器、QA（含图标名和导入导出一致性）、鉴权、额度、流水线、Race（含多模型选择、协议切换和参数降级）、发布分享、表结构补列、调用追踪（含修复轮、Race 分路、失败、写库失败不影响生成）、Race 采用统计口径、用量与运营接口权限、状态页、演示模式（预置应用通过 QA、生成与迭代、Race 分路差异、网关故障降级）、输出上限与无代码时报错
@@ -126,7 +126,7 @@ run_pipeline ──tracer.wrap(llm, agent, step, lane)──▶ TracedLLM ──
 未完成 / 已知限制：
 
 - 生成的应用只能是纯前端应用，数据存在 localStorage，没有后端和数据库
-- 预览依赖 codesandbox.io 的打包服务，网络受限时可能加载慢（Tailwind 运行时已改为本站托管，不再依赖外部 CDN）
+- 预览依赖 codesandbox.io 的打包服务，网络受限时可能加载慢（Tailwind 运行时已改为本站托管，不再依赖外部 CDN）；打包服务曾出现约 7 分钟的间歇性冷编译失败，已显式声明 `@babel/runtime` 依赖，分享页也提供刷新按钮
 - 单个生成请求在 HTTP 连接内完成；中途刷新页面会中断当前生成（已生成的阶段性结果会保留）。Race 期间刷新会丢失对比面板，但两个候选版本已入库，可以在版本列表里查看和采用
 - 分享页同样依赖 codesandbox.io 打包服务，分享出去的是"源码 + 浏览器内编译"，不是预构建的静态产物
 - token 用量依赖模型服务在流式响应里返回 usage；不支持的服务只显示耗时
@@ -194,9 +194,10 @@ feature 分支 -> PR -> CI（后端检查、前端检查、Docker 构建）-> sq
   - variables：`LLM_BASE_URL`、`LLM_MODEL`、`SITE_ADDRESS`（HTTPS 域名，如 `43-161-240-115.sslip.io`）
   - 可选 variable：`ADMIN_USERNAMES`（可访问 `/admin` 的用户名，逗号分隔），不配置时没有管理员
   - 镜像构建时把 commit SHA 作为 `GIT_SHA` 注入，显示在 `/status` 页
-  - 可选：`LLM_RACE_MODELS`（Race 可选模型白名单）不在部署流程里，使用代码中的默认值 `glm-5.3-flashx,glm-5.3,grok-4.7`；要修改时把它加到 deploy 工作流
+  - 可选：`LLM_RACE_MODELS`（Race 可选模型白名单，默认 `glm-5.3-flashx,glm-5.3,grok-4.7`）、`LLM_MAX_TOKENS`（每次调用的输出上限，默认 16384）、`LLM_MOCK`（强制演示模式）不在部署流程里，使用代码中的默认值；要修改时把它们加到 deploy 工作流
   - 修改方式：在 *Settings → Environments → production* 中更新，然后重新运行 *Deploy*。新增配置项时，还需要加到 deploy 工作流的 *Upload runtime config* 步骤。
 - 服务器防火墙需要放行 TCP 80、443（Caddy 申请证书和提供 HTTPS 都需要）。
 - 部署权限：仓库 variable `DEPLOY_HOST`；仓库 secrets `DEPLOY_USER`、`DEPLOY_SSH_KEY`、`DEPLOY_KNOWN_HOSTS`。
 - 回滚：*Actions → Deploy → Run workflow*，填入旧的 commit SHA。只能部署已经在 `main` 上的提交。
+- 线上巡检：`Monitor` 工作流每 30 分钟检查 `/healthz`、`/api/status`（状态为 down 时失败）、首页和一个分享页，失败时 GitHub 邮件通知；也可以在 Actions 里手动运行。
 - `production` 环境及其 secrets 只对 `main` 分支开放，第三方 Action 都固定到 commit SHA。
