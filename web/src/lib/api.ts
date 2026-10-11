@@ -66,6 +66,8 @@ export interface ModelsInfo {
   default: string
   race_models: string[]
   max_race_lanes: number
+  /** No model configured: generations replay prebuilt apps. */
+  demo: boolean
 }
 
 export interface AgentUsage {
@@ -211,7 +213,7 @@ export interface AdminRunPage {
   items: RunSummary[]
 }
 
-export type ComponentState = 'up' | 'down' | 'unconfigured'
+export type ComponentState = 'up' | 'down' | 'demo'
 
 export interface ServiceStatus {
   status: 'operational' | 'degraded' | 'down'

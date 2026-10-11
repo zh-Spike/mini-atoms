@@ -1,6 +1,7 @@
 import { ArrowUp, BarChart3, LogOut, Trash2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import DemoBadge from '../components/DemoBadge'
 import Logo from '../components/Logo'
 import QuotaBadge from '../components/QuotaBadge'
 import { RaceModelPicker, RaceToggle } from '../components/RaceControl'
@@ -77,6 +78,7 @@ export default function Projects() {
         <Logo />
         <div className="flex items-center gap-4 text-sm text-zinc-500">
           {me && <span className="text-zinc-900">{me.username}</span>}
+          <DemoBadge />
           <QuotaBadge me={me} />
           {me?.is_admin && (
             <Link to="/admin" className="flex items-center gap-1 hover:text-zinc-900">

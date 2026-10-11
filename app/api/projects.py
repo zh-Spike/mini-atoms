@@ -10,6 +10,7 @@ from app.agents.llm import (
     LLM,
     MAX_RACE_LANES,
     RaceLaneFactory,
+    demo_mode,
     get_llm,
     get_race_lanes,
     race_models,
@@ -64,6 +65,7 @@ def list_models(_: CurrentUser) -> dict:
         "default": get_settings().llm_model,
         "race_models": race_models(),
         "max_race_lanes": MAX_RACE_LANES,
+        "demo": demo_mode(),
     }
 
 

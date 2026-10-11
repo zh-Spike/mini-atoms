@@ -4,10 +4,12 @@ from typing import Literal, Protocol
 
 from openai import AsyncOpenAI, BadRequestError
 
+from app.agents.mock_llm import FallbackLLM, MockLLM
 from app.config import get_settings
 
 ChatMessages = list[dict[str, str]]
-ChunkKind = Literal["think", "text"]
+# "notice" carries a user-facing system note (e.g. the switch to demo mode), not model output.
+ChunkKind = Literal["think", "text", "notice"]
 
 MAX_RACE_LANES = 3
 
@@ -221,9 +223,30 @@ def build_race_lanes(models: list[str]) -> list[RaceLane]:
     ]
 
 
+def demo_mode() -> bool:
+    settings = get_settings()
+    return settings.llm_mock or not settings.llm_api_key
+
+
+def build_demo_race_lanes(models: list[str]) -> list[RaceLane]:
+    unique = list(dict.fromkeys(models))[:MAX_RACE_LANES]
+    if len(unique) >= 2:
+        labels = [f"{m}（演示）" for m in unique]
+    else:
+        labels = ["演示 · 稳健", "演示 · 创意"]
+    return [RaceLane(label, MockLLM(i, label)) for i, label in enumerate(labels)]
+
+
+def _with_fallback(models: list[str]) -> list[RaceLane]:
+    return [
+        RaceLane(lane.label, FallbackLLM(lane.llm, MockLLM(i)), lane.style)
+        for i, lane in enumerate(build_race_lanes(models))
+    ]
+
+
 def get_llm() -> LLM:
-    return OpenAICompatLLM()
+    return MockLLM() if demo_mode() else FallbackLLM(OpenAICompatLLM(), MockLLM())
 
 
 def get_race_lanes() -> RaceLaneFactory:
-    return build_race_lanes
+    return build_demo_race_lanes if demo_mode() else _with_fallback
