@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     # Models called via the Responses API: on this gateway grok-* rejects Chat Completions and
     # glm-5.3 leaks its reasoning into `content` there. Others are detected on the first 400.
     llm_responses_models: str = "glm-5.3,grok-4.7"
+    # Demo mode: replay prebuilt apps instead of calling a model. Also on when no API key is set.
+    llm_mock: bool = False
 
     secret_key: str = "dev-secret-change-me"
     # Comma-separated "CODE:max_uses" pairs, e.g. "ROOT2026:50,DEMO:10".

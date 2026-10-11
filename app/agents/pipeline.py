@@ -107,6 +107,9 @@ class _TextAgent:
             if kind == "think":
                 yield _ev("thinking", agent=self.agent, text=chunk)
                 continue
+            if kind == "notice":
+                yield _ev("notice", text=chunk)
+                continue
             parts.append(chunk)
             yield _ev("delta", agent=self.agent, text=chunk)
         self.text = "".join(parts).strip()
@@ -149,6 +152,9 @@ class _CodeAgent:
         async for kind, chunk in (llm or self.llm).stream(messages):
             if kind == "think":
                 yield _ev("thinking", agent="alex", text=chunk)
+                continue
+            if kind == "notice":
+                yield _ev("notice", text=chunk)
                 continue
             for e in self.parser.feed(chunk):
                 yield self._convert(e)
@@ -288,6 +294,7 @@ async def _race(
 ) -> AsyncIterator[Event]:
     yield _ev("race_start", lanes=[lane.label for lane in lanes])
     queue: asyncio.Queue[Event | None] = asyncio.Queue()
+    notices: set[str] = set()
 
     async def pump(i: int, lane: RaceLane) -> None:
         last = alex_messages[-1]
@@ -297,7 +304,11 @@ async def _race(
             async for e in _code_and_check(
                 db, project, llm, messages, {}, results[i], persist=False
             ):
-                await queue.put({**e, "lane": i})
+                if e["type"] != "notice":
+                    await queue.put({**e, "lane": i})
+                elif e["text"] not in notices:
+                    notices.add(e["text"])
+                    await queue.put(e)
             await queue.put(_ev("lane_finished", lane=i, ok=not results[i].issues))
         except Exception as exc:
             log.exception("race lane %s failed for project %s", i, project.id)

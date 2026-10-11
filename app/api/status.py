@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 from sqlalchemy import text
 
 from app import metrics
+from app.agents.llm import demo_mode
 from app.config import get_settings
 from app.db import SessionLocal
 
@@ -27,8 +28,8 @@ _probe_cache: dict = {"at": 0.0, "result": None}
 
 async def probe_gateway() -> dict:
     settings = get_settings()
-    if not settings.llm_api_key:
-        return {"status": "unconfigured", "latency_ms": None, "detail": "未配置 LLM_API_KEY"}
+    if demo_mode():
+        return {"status": "demo", "latency_ms": None, "detail": "未接入模型，使用预置结果"}
     client = AsyncOpenAI(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,

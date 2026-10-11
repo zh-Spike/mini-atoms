@@ -21,7 +21,7 @@ const COMPONENT_NAME = { app: '应用服务', database: '数据库', llm_gateway
 const STATE = {
   up: { text: '正常', dot: 'bg-emerald-500' },
   down: { text: '不可用', dot: 'bg-red-500' },
-  unconfigured: { text: '未配置', dot: 'bg-zinc-400' },
+  demo: { text: '演示模式', dot: 'bg-amber-400' },
 } satisfies Record<ComponentState, { text: string; dot: string }>
 
 /** Public status page: component health, 24h success rate and per-model availability. */

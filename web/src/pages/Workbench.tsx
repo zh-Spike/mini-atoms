@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import ChatPanel from '../components/ChatPanel'
+import DemoBadge from '../components/DemoBadge'
 import LiveCode from '../components/LiveCode'
 import Logo from '../components/Logo'
 import PipelineBar from '../components/PipelineBar'
@@ -275,6 +276,7 @@ export default function Workbench() {
               <Eye className="size-3.5" /> 应用
             </TabButton>
           </div>
+          <DemoBadge className="hidden sm:flex" />
           <QuotaBadge me={me} className="hidden sm:flex" />
           <ShareButton
             projectId={projectId}

@@ -161,6 +161,9 @@ class TracedLLM:
         status, error = "ok", None
         try:
             async for kind, chunk in self.inner.stream(messages):
+                if kind == "notice":
+                    yield kind, chunk
+                    continue
                 if first is None:
                     first = time.monotonic()
                 (thinking if kind == "think" else output).append(chunk)
